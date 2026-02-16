@@ -1,38 +1,81 @@
 # MH-SIGNALS: Mental Health Signal Detector
 
-**Project / repository name:** `mental-health-signals`
+## Problem Statement
 
-**MH-SIGNALS** is a modular framework for detecting mental-health signals such as **Intent** and **Concern Level** in online support-group posts.  
-It benchmarks multiple modeling strategies — **MiniLM + Logistic Regression**, **DistilRoBERTa-LoRA**, and **RoBERTa-LoRA** — within a unified YAML-driven pipeline.
+Given a mental health support-group post, **automatically**:
+
+1. **Classify** the user's intent signals (multi-label: 9 tags) and concern severity (Low / Medium / High)
+2. **Retrieve** relevant counselor-authored guidance from a knowledge base, informed by those classifications
+3. **Generate** a safe, grounded, empathetic response
+
+All as a **single end-to-end pipeline** where classification directly drives retrieval and generation quality.
 
 ---
 
-## Repository Structure
+## Architecture
 
 ```
-configs/                  # YAML configs (data.yaml + per-model configs)
-data/
-  raw/                    # raw CSV files
-  raw/kb                  # raw CSV for KB after adding intent + concern tags
-  processed/              # cleaned + tagged datasets
-  processed/kb            # KB embeddings, metadata, snippets and faiss index
-  splits/                 # train/val/test CSVs
-  splits/test_gold.jsonl  # rag validation inputs
-  splits/test_pred.jsonl  # rag validation predictions
-models/                   # training scripts per model
-results/
-  runs/                   # checkpoints, logs, predictions
-  tables/                 # summary CSVs
-scripts/                  # tagging + summaries + kb creation + generation + validation
-utils/                    # helper functions
-logs/                     # Logs for general and high risk inputs to RAG
+mhsignals/                          # Importable Python package
+├── __init__.py
+├── config.py                       # Unified config loader + dataclasses
+├── data.py                         # Shared data loading, tag normalization
+├── pipeline.py                     # End-to-end Pipeline (the core)
+├── classifiers/
+│   ├── base.py                     # BaseClassifier ABC (predict/save/load/train)
+│   ├── intent.py                   # MinilmLRIntentClassifier, LoRAIntentClassifier
+│   └── concern.py                  # MinilmLRConcernClassifier, LoRAConcernClassifier
+├── retriever/
+│   ├── builder.py                  # KB construction (chunk + embed + FAISS)
+│   ├── search.py                   # KBRetriever (FAISS search + intent/concern re-ranking)
+│   └── filters.py                  # Unsafe content filtering
+├── generator/
+│   ├── prompt.py                   # Prompt templates for Flan-T5
+│   ├── generate.py                 # ResponseGenerator (Flan-T5 + validation)
+│   └── safety.py                   # CrisisDetector, ResponseValidator, logging
+└── evaluation/
+    └── metrics.py                  # ReplyQualityEvaluator (4-metric scoring)
+
+scripts/                            # Thin CLI entry points
+├── train.py                        # Unified training (intent or concern, any encoder)
+├── build_kb.py                     # KB construction
+├── generate.py                     # Single-post or batch generation
+└── evaluate.py                     # Quality evaluation
+
+configs/
+├── data.yaml                       # Data paths and split settings
+├── pipeline.yaml                   # Full pipeline config (classifiers + KB + generator)
+├── baseline_minilm.yaml            # MiniLM + LR model config
+├── roberta_lora.yaml               # RoBERTa + LoRA model config
+└── ...                             # Additional model configs
 ```
+
+### Pipeline Flow
+
+```
+User Post
+    │
+    ├──> [1] Crisis Detection (keyword-based, fast)
+    │         └── Immediate danger? → Return crisis resources directly
+    │
+    ├──> [2] Intent Classifier   → ["Mental Distress", "Seeking Help"]
+    │
+    ├──> [3] Concern Classifier  → "High"
+    │
+    ├──> [4] KB Retrieval (FAISS + re-ranking by intent/concern)
+    │         └── Snippets matching predicted tags get boosted
+    │         └── Mismatched concern levels get penalized
+    │
+    ├──> [5] Response Generation (Flan-T5 grounded in snippets)
+    │
+    └──> [6] Safety Validation + Crisis Footer
+              └── Validated Response
+```
+
+Classification directly informs retrieval: the predicted intent and concern re-rank which KB snippets are selected, ensuring the generated response is relevant to the user's specific situation.
 
 ---
 
 ## Setup
-
-Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
@@ -40,299 +83,162 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-or using **conda**:
+---
+
+## Quick Start
+
+### 1. Train Classifiers
 
 ```bash
-conda create --name mh_signals python=3.10
-conda activate mh_signals
-pip install -r requirements.txt
+# Train intent classifier (baseline)
+python scripts/train.py --task intent --encoder minilm_lr --config configs/baseline_minilm.yaml
+
+# Train concern classifier (baseline)
+python scripts/train.py --task concern --encoder minilm_lr --config configs/baseline_minilm.yaml
+```
+
+After training, update the checkpoint paths in `configs/pipeline.yaml`:
+```yaml
+intent_checkpoint: results/runs/<your_intent_run>/checkpoint
+concern_checkpoint: results/runs/<your_concern_run>/checkpoint
+```
+
+### 2. Build Knowledge Base (one-time)
+
+```bash
+python scripts/build_kb.py --config configs/data.yaml
+```
+
+### 3. Generate Responses
+
+**Single post:**
+```bash
+python scripts/generate.py --config configs/pipeline.yaml \
+  --post "I can't focus before my exams and I'm panicking."
+```
+
+**Batch processing:**
+```bash
+python scripts/generate.py --config configs/pipeline.yaml \
+  --input data/splits/test_gold.jsonl \
+  --output data/splits/test_pred.jsonl
+```
+
+### 4. Evaluate Quality
+
+```bash
+python scripts/evaluate.py --pred data/splits/test_pred.jsonl
+```
+
+---
+
+## Python API
+
+```python
+from mhsignals import MHSignalsPipeline
+
+# Load the full pipeline from config
+pipeline = MHSignalsPipeline.from_config("configs/pipeline.yaml")
+
+# Process a single post (end-to-end)
+response = pipeline("I've been feeling really anxious and can't sleep.")
+
+print(response.intents)       # ["Mental Distress"]
+print(response.concern)       # "medium"
+print(response.reply)         # "It sounds like you're going through..."
+print(response.crisis_level)  # "none"
+print(response.snippets)      # [{doc_id, text, similarity, ...}, ...]
+
+# Batch processing
+responses = pipeline.process_batch(["post1...", "post2..."])
+
+# Cleanup GPU/MPS memory when done
+pipeline.cleanup()
 ```
 
 ---
 
 ## Configuration
 
-All dataset and path settings are centralized in:
+### `configs/data.yaml` — Data paths and settings
+Centralized file paths, split ratios, KB schema, and chunking settings.
 
-```
-configs/data.yaml
-```
+### `configs/pipeline.yaml` — Pipeline config
+Defines which classifier checkpoints, KB index, and generator model to use.
+This is the single config that defines the full end-to-end system.
 
-If you move or rename files, update paths only in this file.
-
-Example (already set):
-
-```yaml
-raw_data_path: data/raw/mental_health_signal_detector_data.csv
-tagged_data_path: data/processed/tagged_posts.csv
-splits_dir: data/splits
-processed_dir: data/processed
-results_dir: results
-```
+### `configs/baseline_minilm.yaml` — Model training config
+Each model has its own YAML defining encoder, training hyperparameters, and logging.
 
 ---
 
-## Data and Tagging
+## Intent Tags (9 classes)
 
-Tagging has been completed.
+| Tag | Description |
+|-----|-------------|
+| Critical Risk | Suicidal ideation, self-harm intent |
+| Mental Distress | Anxiety, depression, emotional pain |
+| Maladaptive Coping | Substance abuse, avoidance, harmful behaviors |
+| Positive Coping | Exercise, meditation, healthy strategies |
+| Seeking Help | Asking for advice or professional referrals |
+| Progress Update | Reporting improvement or positive changes |
+| Mood Tracking | Describing current emotional state |
+| Cause of Distress | Identifying triggers or root causes |
+| Miscellaneous | Other mental health content |
 
-* Tagged dataset: `data/processed/tagged_posts.csv`
-* Tag summary: `data/processed/tags_summary.csv`
-* Tag rules: `scripts/tag_rules_assign.py`
+## Concern Levels
 
-If you update raw data, re-run:
-
-```bash
-python scripts/tag_rules_assign.py
-python scripts/tag_summary.py
-```
-
----
-
-## Pipeline Overview
-
-1. **Input:** Raw CSV → cleaned and tagged posts  
-2. **Splitting:** Fixed train/val/test CSVs in `data/splits/`  
-3. **Training:** Model configuration read from YAML  
-4. **Evaluation:** Metrics and predictions generated automatically  
-5. **Results:** Saved to `results/runs/<run_id>/` and summarized in `results/tables/`  
-
-All paths, splits, and outputs are handled through YAML — no manual edits required.
+| Level | Description |
+|-------|-------------|
+| Low | General discussion, mild stress |
+| Medium | Moderate distress, potential risk factors |
+| High | Severe distress, crisis indicators |
 
 ---
 
-## Running Models
+## Evaluation Metrics
 
-Each model has a YAML configuration under `configs/`.
+Quality scoring for generated replies:
 
-### MiniLM + Logistic Regression (Baseline)
+| Metric | Weight | Description |
+|--------|--------|-------------|
+| Relevance | 30% | Semantic similarity between post and reply |
+| Grounding | 45% | How well the reply uses KB snippets (semantic + lexical) |
+| Safety | 20% | Absence of harmful content |
+| Crisis Coverage | 5% | Appropriate crisis resources when needed |
 
-```bash
-python models/baseline_minilm_lr.py --config configs/baseline_minilm.yaml
-```
-
-### DistilRoBERTa + LoRA (Medium)
-
-```bash
-python models/distilroberta_lora.py --config configs/distilroberta_lora.yaml
-```
-
-### RoBERTa-base + LoRA (Strong)
-
-```bash
-# python models/roberta_lora.py --config configs/roberta_lora.yaml
-python -m models.roberta_lora --config configs/roberta_lora.yaml
-```
-
-Each script automatically:
-
-* Loads paths from `configs/data.yaml`
-* Uses the same train/val/test split
-* Saves checkpoints, logs, and metrics
+Grade scale: A (>=0.78), B (>=0.62), C (>=0.48), D (>=0.32), F (<0.32)
 
 ---
 
-## Adding a New Model
+## Safety
 
-To integrate a new model:
+- Multi-tier crisis detection: immediate / high / medium / none
+- All high-risk interactions logged to `logs/interactions/high_risk_*.jsonl`
+- Unsafe KB snippets filtered before generation
+- Response validation catches instruction leakage, persona hallucinations, toxic content
+- Crisis resource footers automatically appended for high-risk posts
+- **This system is NOT a replacement for professional mental health care**
 
-1. Create a new YAML file under `configs/`
-   (refer to existing ones such as `baseline_minilm.yaml`)
-2. Define:
+---
 
-   * `data`: path to `configs/data.yaml`
-   * `training`: epochs, batch size, learning rate, etc.
-   * `model`: name or Hugging Face ID
-   * `logging`: run name and output folder
-3. Run training:
+## Legacy Scripts
 
-```bash
-python models/<trainer_script>.py --config configs/<your_model>.yaml
-```
+The original standalone model scripts remain in `models/` for reference:
+- `models/baseline_minilm_lr.py` — original baseline intent training
+- `models/roberta_lora.py` — original LoRA intent training
+- `models/*_concern.py` — original concern training variants
 
-Outputs are stored under:
-
-```
-results/runs/<your_model>/
-```
+The new architecture in `mhsignals/` replaces and consolidates these.
 
 ---
 
 ## Outputs
 
-| Type               | Location                                |
-| ------------------ | --------------------------------------- |
-| Checkpoints & Logs | `results/runs/<run_id>/`                |
-| Predictions        | `results/runs/<run_id>/predictions.csv` |
-| Summary Metrics    | `results/tables/`                       |
-
-Each run is self-contained, ensuring reproducibility.
-
----
-
-## Notes
-
-* All file paths are centralized in `configs/data.yaml`.
-* Each model’s YAML fully defines its setup.
-* Data splits are consistent across models.
-* Results automatically save under `results/runs/`.
-
----
-
-## RAG (Retrieval-Augmented Generation)
-
-### Overview
-
-The RAG system retrieves relevant counselor responses from a knowledge base and generates empathetic, grounded replies to mental health posts. It includes:
-
-- **Knowledge Base Creation:** Embedding and indexing counselor responses
-- **Generation:** Flan-T5-based reply generation with safety checks
-- **Validation:** Quality evaluation of generated responses
-
-### Prerequisites
-
-1. **Build the Knowledge Base** (one-time setup):
-
-```bash
-python scripts/kb_build.py --config configs/data.yaml
-```
-
-This creates:
-- `data/processed/kb/kb_snippets.jsonl` (chunked responses)
-- `data/processed/kb/kb_embeddings.npy` (embeddings)
-- `data/processed/kb/kb.faiss` (FAISS index)
-- `data/processed/kb/kb_meta.jsonl` (metadata)
-
-### Generating Responses
-
-#### Single Post Generation
-
-```bash
-python scripts/rag_generate.py \
-  --config configs/data.yaml \
-  --post "I can't focus before my exams and I'm panicking." \
-  --concern High \
-  --keep 3 \
-  --gen_model google/flan-t5-xl \
-  --device mps
-```
-
-**Parameters:**
-- `--post`: User's mental health post (required)
-- `--concern`: Predicted concern level (Low/Medium/High), optional
-- `--intents`: Space-separated intent tags, optional
-- `--keep`: Number of KB snippets to retrieve (default: 3)
-- `--topk`: Number of candidates before filtering (default: 50)
-- `--gen_model`: Generator model (default: `google/flan-t5-xl`)
-- `--device`: Device for generation (`mps`, `cuda`, or `cpu`)
-- `--max_new_tokens`: Max tokens to generate (default: 400)
-
-**Output (JSON):**
-```json
-{
-  "post": "...",
-  "crisis_level": "none",
-  "citations": [...],
-  "reply": "...",
-  "disclaimer": "..."
-}
-```
-
-#### Full Test Set Generation
-
-Generate predictions for the entire test set (or a large batch):
-
-```bash
-python scripts/make_preds_from_gold.py \
-  --gold data/splits/test_gold.jsonl \
-  --out data/splits/test_pred.jsonl \
-  --config configs/data.yaml \
-  --gen_model google/flan-t5-xl \
-  --device mps \
-  --timeout 180
-```
-
-**Key Parameters:**
-- `--gold`: Input JSONL file with `{post, intent, concern}` format (required)
-- `--out`: Output predictions JSONL file (required)
-- `--config`: Path to data.yaml configuration (required)
-- `--gen_model`: Generator model (default: `google/flan-t5-large`)
-- `--device`: Device for generation (`cpu`, `mps`, or `cuda`)
-- `--timeout`: Per-post timeout in seconds (default: 180, set to 0 for no timeout)
-- `--sleep_between`: Delay between posts in seconds (default: 0.0)
-- `--max_rows`: Limit number of posts to process (default: 0 = all)
-- `--start_row`: Starting row for resumption (1-based index, default: 1)
-
-**Features:**
-- **Automatic truncation:** Long posts are truncated to 900 characters to prevent timeouts
-- **Robust error handling:** Failed posts are logged but don't stop the batch
-- **Streaming output:** Results are written incrementally (resumable if interrupted)
-- **Progress tracking:** Prints status every 25 posts
-- **Timeout protection:** Prevents individual posts from hanging indefinitely
-
-**Output Format (JSONL):**
-```json
-{
-  "post": "...",
-  "predicted_intents": "Mental Distress",
-  "predicted_concern": "High",
-  "reply": "...",
-  "citations": [...]
-}
-```
-
-**Example: Resume from Row 100**
-```bash
-python scripts/make_preds_from_gold.py \
-  --gold data/splits/test_gold.jsonl \
-  --out data/splits/test_pred.jsonl \
-  --config configs/data.yaml \
-  --gen_model google/flan-t5-xl \
-  --device mps \
-  --start_row 100 \
-  --max_rows 50
-```
-
-This processes rows 100-149, useful for resuming interrupted batches or parallel processing.
-
-### Validating Response Quality
-
-Evaluate the quality of generated responses using multiple metrics:
-
-```bash
-python scripts/validate_reply_quality.py \
-  --pred data/splits/sample_rag_output.jsonl \
-  --enc sentence-transformers/all-MiniLM-L6-v2
-```
-
-**Evaluation Metrics:**
-
-1. **Relevance** (30%): Semantic similarity between post and reply
-2. **Grounding** (45%): How well the reply uses KB snippets (semantic + lexical overlap)
-3. **Safety** (20%): Absence of harmful content or dangerous advice
-4. **Crisis Coverage** (5%): Appropriate crisis resources when needed
-
-### Logs
-
-All RAG interactions are logged for review:
-
-- **General:** `logs/general_YYYYMMDD.jsonl`
-- **High-risk:** `logs/high_risk_YYYYMMDD.jsonl`
-
-Each log entry includes post hash, reply hash, crisis level, and timestamp for auditing.
-
-**RAG System Architecture Summary**
-
-1. Build Phase (kb_build.py → kb_encode_index.py):
-CSV → Chunked JSONL → Embeddings → FAISS index
-
-2. Retrieval Phase (kb_search.py / retrieve() in rag_generate.py):
-Query → Encode → FAISS search → Filter by intent/concern → Ranked snippets
-
-3. Generation Phase (rag_generate.py):
-Snippets + Post → Prompt → Flan-T5 → Validated Reply + Crisis Resources
-
-4. Evaluation Phase (validate_reply_quality.py):
-Relevance + Grounding + Safety + Crisis Coverage → Letter Grade
----
-
+| Type | Location |
+|------|----------|
+| Classifier checkpoints | `results/runs/<run_id>/checkpoint/` |
+| Training metrics | `results/runs/<run_id>/metrics_*.json` |
+| Predictions | `results/runs/<run_id>/tables/` |
+| KB artifacts | `data/processed/kb/` |
+| Interaction logs | `logs/interactions/` |

@@ -1,0 +1,16 @@
+{
+  "type": "MinilmLRIntentClassifier",
+  "embedder_name": "sentence-transformers/all-MiniLM-L6-v2",
+  "label_names": [
+    "Cause of Distress",
+    "Critical Risk",
+    "Maladaptive Coping",
+    "Mental Distress",
+    "Miscellaneous",
+    "Mood Tracking",
+    "Positive Coping",
+    "Progress Update",
+    "Seeking Help"
+  ],
+  "threshold": 0.5
+}

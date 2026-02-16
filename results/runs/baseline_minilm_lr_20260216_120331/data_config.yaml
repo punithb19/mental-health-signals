@@ -1,0 +1,35 @@
+kb:
+  chunking:
+    enabled: true
+    min_chars: 20
+    target_tokens: 140
+  corpus_jsonl: data/processed/kb/kb_snippets.jsonl
+  embeddings_npy: data/processed/kb/kb_embeddings.npy
+  faiss_index: data/processed/kb/kb.faiss
+  metadata_jsonl: data/processed/kb/kb_meta.jsonl
+  processed_dir: data/processed/kb
+  raw_dir: data/raw/kb
+  schema:
+    concern_col: Concern_Level
+    id_col: doc_id
+    input_col: input
+    intent_col: Final_Intent_Tag
+    output_col: output
+labels:
+  concern_map:
+    high: 2
+    low: 0
+    medium: 1
+paths:
+  llm_tagged_dir: data/llm_tagged
+  processed_csv: data/raw/kb/rag_intent_data_w_concern.csv
+  processed_dir: data/processed
+  raw_csv: data/raw/final/mh_signal_data_w-concern-intent.csv
+  results_dir: results
+  splits_dir: data/llm_tagged/splits
+seed: 42
+split:
+  test_size: 0.15
+  val_size_from_train: 0.1765
+text:
+  max_len: 256

@@ -30,5 +30,13 @@ hf_cache/
 *.ckpt
 
 models/__pycache__/
+__pycache__/
+*.pyc
+
+*.egg-info/
+build/
+dist/
+
+logs/interactions/
 
 .DS_Store

@@ -1,0 +1,9 @@
+{
+  "type": "MinilmLRConcernClassifier",
+  "embedder_name": "sentence-transformers/all-MiniLM-L6-v2",
+  "label_names": [
+    "high",
+    "low",
+    "medium"
+  ]
+}

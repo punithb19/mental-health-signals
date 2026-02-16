@@ -1,0 +1,47 @@
+# =============================================================================
+# MH-SIGNALS Pipeline Configuration
+# =============================================================================
+# This config defines the full end-to-end pipeline:
+#   post -> classify (intent + concern) -> retrieve -> generate -> validate
+#
+# Usage:
+#   from mhsignals import MHSignalsPipeline
+#   pipeline = MHSignalsPipeline.from_config("configs/pipeline.yaml")
+#   response = pipeline("I'm struggling with anxiety before my exams.")
+# =============================================================================
+
+seed: 42
+
+# --- Classifier checkpoints ---
+# These should point to directories containing meta.json + model artifacts
+# produced by: python scripts/train.py --task intent/concern ...
+intent_checkpoint: results/runs/baseline_minilm_lr_20260216_153212/checkpoint
+concern_checkpoint: results/runs/baseline_minilm_lr_20260216_153258/checkpoint
+
+# --- Knowledge Base ---
+kb:
+  metadata_jsonl: data/processed/kb/kb_meta.jsonl
+  faiss_index: data/processed/kb/kb.faiss
+  corpus_jsonl: data/processed/kb/kb_snippets.jsonl
+  embeddings_npy: data/processed/kb/kb_embeddings.npy
+  processed_dir: data/processed/kb
+
+# --- Retriever ---
+retriever:
+  encoder_model: sentence-transformers/all-MiniLM-L6-v2
+  topk: 50           # FAISS candidates before re-ranking
+  keep: 5            # Snippets passed to generator after re-ranking
+  min_similarity: 0.3
+
+# --- Generator ---
+generator:
+  model_name: google/flan-t5-base    # or google/flan-t5-large, google/flan-t5-xl
+  device: mps                         # cpu, mps, or cuda
+  max_new_tokens: 400
+  do_sample: false
+  temperature: 0.7
+  top_p: 0.9
+  max_prompt_chars: 2000
+
+# --- Logging ---
+log_dir: logs/interactions
