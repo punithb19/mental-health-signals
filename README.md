@@ -1,5 +1,7 @@
 # MH-SIGNALS: Mental Health Signal Detector
 
+**Project / repository name:** `mental-health-signals`
+
 **MH-SIGNALS** is a modular framework for detecting mental-health signals such as **Intent** and **Concern Level** in online support-group posts.  
 It benchmarks multiple modeling strategies — **MiniLM + Logistic Regression**, **DistilRoBERTa-LoRA**, and **RoBERTa-LoRA** — within a unified YAML-driven pipeline.
 
@@ -334,5 +336,3 @@ Snippets + Post → Prompt → Flan-T5 → Validated Reply + Crisis Resources
 Relevance + Grounding + Safety + Crisis Coverage → Letter Grade
 ---
 
-**Team Members:**  
-Gaurav Zanpure · Shreyansh Kabra · Pragya Dhawan · Suyash Roy · Vanshika Wadhwa · Punith Basavaraj

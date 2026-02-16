@@ -709,7 +709,12 @@ def main():
     elif device == "cuda" and not torch.cuda.is_available():
         logger.warning("CUDA not available, falling back to CPU")
         device = "cpu"
-    
+    # Avoid known segfault: Flan-T5 on CPU with PyTorch 2.x + Python 3.13 on macOS.
+    # Prefer MPS on Apple Silicon when user asked for CPU.
+    if device == "cpu" and torch.backends.mps.is_available():
+        logger.info("Using MPS instead of CPU for generation (avoids macOS segfault)")
+        device = "mps"
+
     model.to(device)
     logger.info(f"Using device: {device}")
     

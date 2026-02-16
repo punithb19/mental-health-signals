@@ -2,16 +2,14 @@
 
 echo "===== Local RAG Prediction Run ====="
 
-# Move into project directory (optional)
+# Move into project directory (script location)
 cd "$(dirname "$0")"
-#cd /Users/pragya/Documents/GitHub/group-23-mh-signals 2>/dev/null || true
-cd /Users/vanshikawadhwa/Documents/NLP/group-23-mh-signals 2>/dev/null || true
 echo "Current directory: $(pwd)"
 
 # --- Create + Activate Virtual Environment ---
 echo "===== Setting up virtual environment ====="
 
-if [ ! -d ".venv11" ]; then
+if [ ! -d ".venv311" ]; then
     echo "No venv found — creating a new one..."
     python3 -m venv .venv311
     source .venv311/bin/activate
