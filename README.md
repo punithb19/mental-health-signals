@@ -36,6 +36,7 @@ mhsignals/                          # Importable Python package
     └── metrics.py                  # ReplyQualityEvaluator (4-metric scoring)
 
 scripts/                            # Thin CLI entry points
+├── create_splits.py                # Data splitting (driven by data.yaml)
 ├── train.py                        # Unified training (intent or concern, any encoder)
 ├── build_kb.py                     # KB construction
 ├── generate.py                     # Single-post or batch generation
@@ -47,6 +48,15 @@ configs/
 ├── baseline_minilm.yaml            # MiniLM + LR model config
 ├── roberta_lora.yaml               # RoBERTa + LoRA model config
 └── ...                             # Additional model configs
+
+tests/                              # pytest test suite
+├── conftest.py                     # Shared fixtures
+├── test_config.py                  # Config loading
+├── test_data.py                    # Tag/concern normalization
+├── test_evaluation.py              # Quality scoring
+├── test_filters.py                 # Unsafe snippet filtering
+├── test_prompt.py                  # Prompt building
+└── test_safety.py                  # Crisis detection + response validation
 ```
 
 ### Pipeline Flow
@@ -87,14 +97,34 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### 1. Train Classifiers
+### 0. Create Data Splits
 
 ```bash
-# Train intent classifier (baseline)
+python scripts/create_splits.py --config configs/data.yaml
+```
+
+This reads `configs/data.yaml` for paths and split ratios, producing:
+- `data/splits/train.csv`, `val.csv`, `test.csv` — CSV splits for training
+- `data/splits/test_gold.jsonl` — JSONL of test posts for batch generation
+
+### 1. Train Classifiers
+
+**Baseline (MiniLM + Logistic Regression):**
+```bash
+# Train intent classifier
 python scripts/train.py --task intent --encoder minilm_lr --config configs/baseline_minilm.yaml
 
-# Train concern classifier (baseline)
+# Train concern classifier
 python scripts/train.py --task concern --encoder minilm_lr --config configs/baseline_minilm.yaml
+```
+
+**LoRA fine-tuning (RoBERTa, requires GPU/MPS):**
+```bash
+# Train LoRA intent classifier
+python scripts/train.py --task intent --encoder lora --config configs/roberta_lora.yaml
+
+# Train LoRA concern classifier
+python scripts/train.py --task concern --encoder lora --config configs/roberta_lora_concern.yaml
 ```
 
 After training, update the checkpoint paths in `configs/pipeline.yaml`:
@@ -128,6 +158,18 @@ python scripts/generate.py --config configs/pipeline.yaml \
 
 ```bash
 python scripts/evaluate.py --pred data/splits/test_pred.jsonl
+```
+
+Evaluation is reference-free: it scores relevance, grounding, safety, and crisis coverage without needing gold replies. See [Evaluation Metrics](#evaluation-metrics) for details.
+
+### 5. Run Tests
+
+```bash
+# Fast unit tests (no ML models needed)
+python -m pytest tests/ -m "not slow" -v
+
+# All tests including slow model-dependent ones
+python -m pytest tests/ -v
 ```
 
 ---
@@ -166,6 +208,7 @@ Centralized file paths, split ratios, KB schema, and chunking settings.
 ### `configs/pipeline.yaml` — Pipeline config
 Defines which classifier checkpoints, KB index, and generator model to use.
 This is the single config that defines the full end-to-end system.
+Retriever `min_similarity` is set to 0.45 (RAG-enhanced) for more relevant snippets.
 
 ### `configs/baseline_minilm.yaml` — Model training config
 Each model has its own YAML defining encoder, training hyperparameters, and logging.
@@ -226,10 +269,15 @@ Grade scale: A (>=0.78), B (>=0.62), C (>=0.48), D (>=0.32), F (<0.32)
 
 The original standalone model scripts remain in `models/` for reference:
 - `models/baseline_minilm_lr.py` — original baseline intent training
-- `models/roberta_lora.py` — original LoRA intent training
+- `models/roberta_lora.py` — original LoRA intent training (called by `scripts/train.py --encoder lora`)
 - `models/*_concern.py` — original concern training variants
 
 The new architecture in `mhsignals/` replaces and consolidates these.
+
+Additional scripts in `scripts/`:
+- `scripts/rag_generate.py` — standalone RAG script that accepts manual intents/concern (useful for ablation studies; the primary batch path is `scripts/generate.py`)
+- `scripts/validate_reply_quality.py` — deprecated; use `scripts/evaluate.py` instead
+- `scripts/make_preds_from_gold.py`, `scripts/run_sample_rag.py` — legacy wrappers around `rag_generate.py`; prefer `scripts/generate.py --input` for batch predictions
 
 ---
 

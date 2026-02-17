@@ -1,0 +1,28 @@
+{
+  "post": "I can't focus before my exams and I'm panicking.",
+  "intents": [
+    "Mental Distress",
+    "Seeking Help"
+  ],
+  "concern": "medium",
+  "crisis_level": "none",
+  "crisis_detected": false,
+  "snippets": [
+    {
+      "doc_id": "kb_0004152_c3",
+      "intent": "Seeking Help",
+      "concern": "Medium",
+      "similarity": 0.72,
+      "text": "Therapists often introduce relaxation techniques, grounding exercises, and stress management skills that can contribute to reducing anxiety symptoms. Additionally, they can guide you in developing a personalized toolkit containing diverse coping mechanisms..."
+    },
+    {
+      "doc_id": "kb_0003432_c1",
+      "intent": "Progress Update",
+      "concern": "Medium",
+      "similarity": 0.71,
+      "text": "It's great that you're seeking therapy to better understand and manage your anxiety. Anxiety can be overwhelming, but with the right techniques and support, it is definitely possible to experience relief..."
+    }
+  ],
+  "reply": "It sounds like exam pressure is really affecting you right now. Anxiety before tests is common, and there are strategies that can help—like short breathing exercises, breaking study into small chunks, and talking to a counselor or support person. Many people find that grounding techniques and a consistent routine ease the panic. Reaching out for support is a good step.",
+  "disclaimer": "This is an automated support resource, NOT professional mental health care. For personalized help, please consult a licensed mental health professional."
+}

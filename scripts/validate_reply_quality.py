@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """
-RAG Quality Evaluation v2
+DEPRECATED: Use scripts/evaluate.py instead.
+
+This script is kept for backward compatibility. The canonical evaluation
+entry point is:
+
+    python scripts/evaluate.py --pred <predictions.jsonl>
+
+which uses mhsignals.evaluation.metrics.ReplyQualityEvaluator.
+
+---------------------------------------
+RAG Quality Evaluation v2 (legacy)
 ---------------------------------------
 Evaluates:
   1. Relevance (semantic similarity)
@@ -9,10 +19,16 @@ Evaluates:
   4. Crisis Coverage (correct footer if needed)
 
 Usage:
-  python eval_rag_quality_v2.py \
+  python scripts/validate_reply_quality.py \
       --pred sample_rag_output.jsonl \
       --enc sentence-transformers/all-MiniLM-L6-v2
 """
+import warnings
+warnings.warn(
+    "validate_reply_quality.py is deprecated. Use scripts/evaluate.py instead.",
+    DeprecationWarning,
+    stacklevel=1,
+)
 
 import json
 import argparse

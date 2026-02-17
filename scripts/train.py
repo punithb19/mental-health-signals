@@ -44,25 +44,29 @@ def main():
 
     if args.task == "intent" and args.encoder == "minilm_lr":
         from mhsignals.classifiers.intent import MinilmLRIntentClassifier
-        print(f"Training: MinilmLR Intent Classifier")
+        print("Training: MinilmLR Intent Classifier")
         clf = MinilmLRIntentClassifier.train(config)
-        print(f"Model saved. Use the checkpoint path for pipeline.yaml.")
+        print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "concern" and args.encoder == "minilm_lr":
         from mhsignals.classifiers.concern import MinilmLRConcernClassifier
-        print(f"Training: MinilmLR Concern Classifier")
+        print("Training: MinilmLR Concern Classifier")
         clf = MinilmLRConcernClassifier.train(config)
-        print(f"Model saved. Use the checkpoint path for pipeline.yaml.")
+        print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "intent" and args.encoder == "lora":
-        print("LoRA intent training: delegating to models/roberta_lora.py")
-        print("Run: python -m models.roberta_lora --config", args.config)
-        sys.exit(0)
+        print("Training: LoRA Intent Classifier (RoBERTa)")
+        from models.roberta_lora import main as lora_intent_main
+        sys.argv = ["train.py", "--config", args.config]
+        lora_intent_main()
+        print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "concern" and args.encoder == "lora":
-        print("LoRA concern training: delegating to models/roberta_lora_concern.py")
-        print("Run: python -m models.roberta_lora_concern --config", args.config)
-        sys.exit(0)
+        print("Training: LoRA Concern Classifier (RoBERTa)")
+        from models.roberta_lora_concern import main as lora_concern_main
+        sys.argv = ["train.py", "--config", args.config]
+        lora_concern_main()
+        print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
 
 if __name__ == "__main__":
