@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
 from .classifiers.base import BaseClassifier
-from .config import GeneratorConfig, PipelineConfig, load_pipeline_config
+from .config import GeneratorConfig, PipelineConfig, RetrieverConfig, load_pipeline_config
 from .generator.generate import ResponseGenerator
 from .generator.safety import CrisisDetector, CrisisResult, ResponseValidator, log_interaction
 from .retriever.search import KBRetriever
@@ -79,6 +79,7 @@ class MHSignalsPipeline:
         generator: ResponseGenerator,
         crisis_detector: Optional[CrisisDetector] = None,
         response_validator: Optional[ResponseValidator] = None,
+        retriever_config: Optional[RetrieverConfig] = None,
         log_dir: str = "logs/interactions",
         enable_logging: bool = True,
     ):
@@ -88,6 +89,7 @@ class MHSignalsPipeline:
         self.generator = generator
         self.crisis_detector = crisis_detector or CrisisDetector()
         self.response_validator = response_validator or ResponseValidator()
+        self._retriever_config = retriever_config
         self._log_dir = log_dir
         self._enable_logging = enable_logging
 
@@ -123,6 +125,7 @@ class MHSignalsPipeline:
             concern_classifier=concern_clf,
             retriever=retriever,
             generator=generator,
+            retriever_config=cfg.retriever,
             log_dir=cfg.log_dir,
         )
 
@@ -188,10 +191,14 @@ class MHSignalsPipeline:
             return response
 
         # ---- Step 4: KB retrieval (classification-informed) ----
+        ret_cfg = self._retriever_config
         snippets = self.retriever.search(
             post=post,
             intents=intents,
             concern=concern,
+            topk=ret_cfg.topk if ret_cfg else 50,
+            keep=ret_cfg.keep if ret_cfg else 5,
+            min_similarity=ret_cfg.min_similarity if ret_cfg else 0.45,
         )
 
         # ---- Step 5: Response generation ----

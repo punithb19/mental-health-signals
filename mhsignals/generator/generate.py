@@ -162,6 +162,9 @@ class ResponseGenerator:
             try:
                 gen_ids = self._model.generate(input_ids, **gen_kwargs)
                 reply = self._tokenizer.decode(gen_ids[0], skip_special_tokens=True).strip()
+                # Normalize: capitalize first letter so we don't reject good content on format alone
+                if reply and reply[0].islower():
+                    reply = reply[0].upper() + reply[1:]
                 best = reply
 
                 if self._validator.is_valid(reply, post, snippets):
@@ -187,6 +190,8 @@ class ResponseGenerator:
         if best:
             cleaned = self._cleanup_truncated(best)
             if cleaned:
+                if cleaned[0].islower():
+                    cleaned = cleaned[0].upper() + cleaned[1:]
                 return cleaned
 
         logger.error("All generation attempts failed, returning fallback")

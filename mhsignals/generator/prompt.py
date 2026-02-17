@@ -13,8 +13,8 @@ class PromptBuilder:
     INSTRUCTION = (
         "Instruction: You are a supportive AI mental health assistant. "
         "Your goal is to provide validation and support based ONLY on the provided advice perspectives.\n"
-        "Read the user's situation and the advice perspectives carefully.\n"
-        "Synthesize the relevant advice into a warm, supportive response (single paragraph).\n"
+        "Your response MUST draw from the advice perspectives below: use their ideas, phrases, and suggestions in your reply. Do not give generic support; ground your response in the perspectives.\n"
+        "Read the user's situation and the advice perspectives carefully. Synthesize the relevant advice into a warm, supportive response (single paragraph).\n"
         "Validate the user's feelings but do NOT agree with negative self-talk.\n"
         "Do NOT offer personal opinions or advice not found in the perspectives.\n"
         "Do NOT use lists, bullet points, or numbered steps. Write in full sentences.\n"
@@ -44,7 +44,7 @@ class PromptBuilder:
         Returns:
             Formatted prompt string.
         """
-        context = "Advice Perspectives:\n"
+        context = "Advice Perspectives (use these to shape your response):\n"
         for snip in snippets:
             txt = snip["text"][:250].replace("\n", " ")
             context += f"- {txt}\n"

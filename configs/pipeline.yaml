@@ -30,8 +30,8 @@ kb:
 retriever:
   encoder_model: sentence-transformers/all-MiniLM-L6-v2
   topk: 50           # FAISS candidates before re-ranking
-  keep: 5            # Snippets passed to generator after re-ranking
-  min_similarity: 0.3
+  keep: 6            # Snippets passed to generator (more context for better grounding)
+  min_similarity: 0.45   # Stricter threshold for more relevant snippets (RAG-enhanced)
 
 # --- Generator ---
 generator:

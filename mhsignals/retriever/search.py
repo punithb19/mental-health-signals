@@ -62,7 +62,7 @@ class KBRetriever:
         concern: Optional[str] = None,
         topk: int = 50,
         keep: int = 5,
-        min_similarity: float = 0.3,
+        min_similarity: float = 0.45,
     ) -> List[Dict]:
         """
         Retrieve and re-rank KB snippets for a given post.
@@ -140,6 +140,10 @@ class KBRetriever:
         top_snippets = candidates[:keep]
 
         safe_snippets = filter_unsafe_snippets(top_snippets)
+
+        # Renumber ranks after filtering (consistent with RAG script)
+        for i, snippet in enumerate(safe_snippets):
+            snippet["rank"] = i + 1
 
         logger.info(
             "Retrieved %d snippets (from %d candidates) for post: %.60s...",

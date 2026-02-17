@@ -35,11 +35,11 @@ class KBConfig:
 
 @dataclass
 class RetrieverConfig:
-    """Retrieval settings."""
+    """Retrieval settings (enhanced defaults for better relevance)."""
     encoder_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     topk: int = 50
     keep: int = 5
-    min_similarity: float = 0.3
+    min_similarity: float = 0.45  # Stricter threshold for more relevant snippets
 
 
 @dataclass
@@ -146,7 +146,7 @@ def load_pipeline_config(path: str) -> PipelineConfig:
         encoder_model=ret_raw.get("encoder_model", "sentence-transformers/all-MiniLM-L6-v2"),
         topk=int(ret_raw.get("topk", 50)),
         keep=int(ret_raw.get("keep", 5)),
-        min_similarity=float(ret_raw.get("min_similarity", 0.3)),
+        min_similarity=float(ret_raw.get("min_similarity", 0.45)),
     )
 
     gen_raw = raw.get("generator", {})
