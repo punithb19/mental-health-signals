@@ -237,19 +237,21 @@ class LoRAConcernClassifier(BaseClassifier):
     def predict(self, text: str) -> str:
         return self.predict_batch([text])[0]
 
-    def predict_batch(self, texts: List[str]) -> List[str]:
+    def predict_batch(self, texts: List[str], batch_size: int = 16) -> List[str]:
         import torch
 
         self._model.eval()
-        enc = self._tokenizer(
-            texts, padding=True, truncation=True,
-            max_length=self._max_length, return_tensors="pt",
-        ).to(self._device)
-
-        with torch.no_grad():
-            logits = self._model(**enc).logits
-        preds = logits.argmax(dim=-1).cpu().tolist()
-        return [self._label_names[i] for i in preds]
+        all_preds = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            enc = self._tokenizer(
+                batch, padding=True, truncation=True,
+                max_length=self._max_length, return_tensors="pt",
+            ).to(self._device)
+            with torch.no_grad():
+                logits = self._model(**enc).logits
+            all_preds.extend(logits.argmax(dim=-1).cpu().tolist())
+        return [self._label_names[i] for i in all_preds]
 
     def save(self, path: str) -> None:
         out = ensure_dir(Path(path))
@@ -272,10 +274,29 @@ class LoRAConcernClassifier(BaseClassifier):
             meta = json.load(f)
 
         tokenizer = AutoTokenizer.from_pretrained(str(p / "tokenizer"))
-        model = AutoModelForSequenceClassification.from_pretrained(
-            str(p / "model"),
-            num_labels=len(meta["label_names"]),
-        )
+
+        model_dir = p / "model"
+        adapter_config = model_dir / "adapter_config.json"
+
+        if adapter_config.exists():
+            # PEFT adapter checkpoint: load base model then apply adapter
+            import json as _json
+            with open(adapter_config) as f:
+                acfg = _json.load(f)
+            base_name = acfg.get("base_model_name_or_path", "distilroberta-base")
+            base_model = AutoModelForSequenceClassification.from_pretrained(
+                base_name,
+                num_labels=len(meta["label_names"]),
+            )
+            from peft import PeftModel
+            model = PeftModel.from_pretrained(base_model, str(model_dir))
+            model = model.merge_and_unload()
+        else:
+            # Full model checkpoint
+            model = AutoModelForSequenceClassification.from_pretrained(
+                str(model_dir),
+                num_labels=len(meta["label_names"]),
+            )
 
         device = "cpu"
         if torch.cuda.is_available():

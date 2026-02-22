@@ -8,7 +8,7 @@ data:
 model:
   name: "distilroberta-base"
   max_length: 512
-  num_labels: 9
+  num_labels: 3
 
 # LoRA (Low-Rank Adaptation) configuration
 lora:
@@ -45,7 +45,7 @@ training:
   eval_batch_size: 32
   learning_rate: 1e-4
   weight_decay: 0.01
-  output_dir: "models/checkpoints/"
+  output_dir: "models/checkpoints/concern/"
 
 # Logging configuration
 logging:

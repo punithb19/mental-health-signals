@@ -1,0 +1,9 @@
+{
+  "type": "LoRAConcernClassifier",
+  "label_names": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "max_length": 512
+}

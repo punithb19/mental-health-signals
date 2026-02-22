@@ -20,7 +20,8 @@ Thumbs.db
 *.bak
 
 wandb/
-# results/runs/
+results/runs/*/checkpoint/model/
+*.safetensors
 models/checkpoints/
 output/
 cache/

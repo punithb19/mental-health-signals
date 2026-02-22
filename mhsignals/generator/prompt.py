@@ -1,27 +1,19 @@
 """
 Prompt engineering for grounded RAG generation.
 
-Builds structured prompts that ground Flan-T5 output in KB snippets.
+Uses T5-native task framing: summarization and paraphrase tasks that
+T5 models handle well, even at the base (250M) size.
 """
 
 from typing import Dict, List, Optional
 
 
+MAX_SNIPPET_CHARS = 250
+MAX_PROMPT_SNIPPETS = 3
+
+
 class PromptBuilder:
     """Construct prompts for the Flan-T5 generator from snippets + post."""
-
-    INSTRUCTION = (
-        "Instruction: You are a supportive AI mental health assistant. "
-        "Your goal is to provide validation and support based ONLY on the provided advice perspectives.\n"
-        "Your response MUST draw from the advice perspectives below: use their ideas, phrases, and suggestions in your reply. Do not give generic support; ground your response in the perspectives.\n"
-        "Read the user's situation and the advice perspectives carefully. Synthesize the relevant advice into a warm, supportive response (single paragraph).\n"
-        "Validate the user's feelings but do NOT agree with negative self-talk.\n"
-        "Do NOT offer personal opinions or advice not found in the perspectives.\n"
-        "Do NOT use lists, bullet points, or numbered steps. Write in full sentences.\n"
-        "Do NOT use 'I', 'me', 'my', or share personal experiences. Speak only as a supportive resource.\n"
-        "Do NOT refer to the user as 'patient', 'client', or use clinical jargon.\n"
-        "Do NOT pretend to be a counselor or refer to past sessions.\n\n"
-    )
 
     def build(
         self,
@@ -32,26 +24,47 @@ class PromptBuilder:
         max_chars: int = 2000,
     ) -> str:
         """
-        Build a grounded RAG prompt for Flan-T5.
+        Build a T5-native grounded RAG prompt.
 
-        Args:
-            post:     User's post text.
-            snippets: Retrieved KB snippets (each has a 'text' key).
-            intents:  Predicted intent tags (currently used for context, not injected).
-            concern:  Predicted concern level (currently used for context, not injected).
-            max_chars: Maximum prompt length in characters.
+        Uses a summarization/paraphrase format that T5 handles well:
+        "Summarize this advice for someone who [situation]: [advice]"
 
-        Returns:
-            Formatted prompt string.
+        This avoids complex multi-rule instructions that small T5 models
+        fail to follow, and instead leverages T5's strong summarization.
         """
-        context = "Advice Perspectives (use these to shape your response):\n"
-        for snip in snippets:
-            txt = snip["text"][:250].replace("\n", " ")
-            context += f"- {txt}\n"
-        context += "\n"
+        # Extract key advice sentences from snippets
+        use_snippets = snippets[:MAX_PROMPT_SNIPPETS]
+        advice_parts = []
+        for snip in use_snippets:
+            txt = snip["text"][:MAX_SNIPPET_CHARS].replace("\n", " ").strip()
+            # Trim to last full sentence
+            if txt and txt[-1] not in ".!?":
+                last_period = txt.rfind(".")
+                if last_period > 50:
+                    txt = txt[:last_period + 1]
+            advice_parts.append(txt)
 
-        post_block = f"User Situation: {post}\n\n"
-        task = "Assistant Response:\n"
+        advice_text = " ".join(advice_parts)
 
-        prompt = self.INSTRUCTION + context + post_block + task
+        # Concern-aware framing
+        tone = "supportive"
+        extra = ""
+        if concern and concern.lower() == "high":
+            tone = "gentle and supportive, encouraging professional help"
+        elif concern and concern.lower() == "medium":
+            tone = "warm and supportive, with practical suggestions"
+        elif concern and concern.lower() == "low":
+            tone = "encouraging and affirming"
+            if intents and "Positive Coping" in intents:
+                extra = " Acknowledge their positive efforts and encourage them to continue."
+
+        post_text = post[:300].strip()
+
+        prompt = (
+            f"Summarize the following advice into a {tone} reply "
+            f"for someone who says: \"{post_text}\"\n\n"
+            f"Advice: {advice_text}\n\n"
+            f"Write a 3-5 sentence reply addressing the person directly as 'you'.{extra}"
+        )
+
         return prompt[:max_chars]

@@ -33,9 +33,29 @@ class KBRetriever:
         faiss_index_path: str,
         encoder_name: str = "sentence-transformers/all-MiniLM-L6-v2",
     ):
+        # Validate paths before loading
+        if not Path(metadata_path).exists():
+            raise FileNotFoundError(
+                f"KB metadata file not found: {metadata_path}. "
+                "Run scripts/build_kb.py first."
+            )
+        if not Path(faiss_index_path).exists():
+            raise FileNotFoundError(
+                f"FAISS index file not found: {faiss_index_path}. "
+                "Run scripts/build_kb.py first."
+            )
+
         self._meta = self._load_meta(metadata_path)
         self._index = faiss.read_index(faiss_index_path)
         self._encoder = SentenceTransformer(encoder_name)
+
+        # Validate metadata/index consistency
+        if len(self._meta) != self._index.ntotal:
+            logger.warning(
+                "Metadata count (%d) does not match FAISS index count (%d). "
+                "KB may need rebuilding.",
+                len(self._meta), self._index.ntotal,
+            )
 
         # Improve HNSW recall
         try:
@@ -140,6 +160,13 @@ class KBRetriever:
         top_snippets = candidates[:keep]
 
         safe_snippets = filter_unsafe_snippets(top_snippets)
+
+        if len(safe_snippets) == 0 and len(top_snippets) > 0:
+            logger.warning(
+                "All %d retrieved snippets were filtered as unsafe; "
+                "generator will receive no context and use fallback response.",
+                len(top_snippets),
+            )
 
         # Renumber ranks after filtering (consistent with RAG script)
         for i, snippet in enumerate(safe_snippets):

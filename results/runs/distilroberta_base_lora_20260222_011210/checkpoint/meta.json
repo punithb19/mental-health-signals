@@ -1,0 +1,16 @@
+{
+  "type": "LoRAIntentClassifier",
+  "label_names": [
+    "Cause of Distress",
+    "Critical Risk",
+    "Maladaptive Coping",
+    "Mental Distress",
+    "Miscellaneous",
+    "Mood Tracking",
+    "Positive Coping",
+    "Progress Update",
+    "Seeking Help"
+  ],
+  "threshold": 0.3400000000000001,
+  "max_length": 512
+}

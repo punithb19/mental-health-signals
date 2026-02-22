@@ -8,6 +8,8 @@ Usage:
 """
 
 import argparse
+import sys
+from pathlib import Path
 
 from mhsignals.config import load_data_config
 from mhsignals.retriever.builder import KBBuilder
@@ -35,10 +37,21 @@ def main():
     )
     args = ap.parse_args()
 
+    # Validate config path
+    if not Path(args.config).exists():
+        print(f"[ERROR] Config file not found: {args.config}", file=sys.stderr)
+        sys.exit(1)
+
     data_cfg = load_data_config(args.config)
     builder = KBBuilder(data_cfg.kb)
 
     csv_path = args.csv or data_cfg.processed_csv or None
+
+    # Validate CSV path before building
+    if csv_path and not Path(csv_path).exists():
+        print(f"[ERROR] CSV file not found: {csv_path}", file=sys.stderr)
+        sys.exit(1)
+
     outputs = builder.build_all(
         csv_path=csv_path,
         encoder_name=args.encoder,

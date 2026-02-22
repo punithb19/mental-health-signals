@@ -15,8 +15,9 @@ seed: 42
 # --- Classifier checkpoints ---
 # These should point to directories containing meta.json + model artifacts
 # produced by: python scripts/train.py --task intent/concern ...
-intent_checkpoint: results/runs/baseline_minilm_lr_20260216_153212/checkpoint
-concern_checkpoint: results/runs/baseline_minilm_lr_20260216_153258/checkpoint
+intent_checkpoint: results/runs/distilroberta_base_lora_20260222_011210/checkpoint
+intent_threshold: 0.35
+concern_checkpoint: results/runs/distilroberta_base_lora_concern_20260222_095012/checkpoint
 
 # --- Knowledge Base ---
 kb:
@@ -35,9 +36,9 @@ retriever:
 
 # --- Generator ---
 generator:
-  model_name: google/flan-t5-base    # or google/flan-t5-large, google/flan-t5-xl
+  model_name: google/flan-t5-large   # Upgraded: much better instruction-following than base
   device: mps                         # cpu, mps, or cuda
-  max_new_tokens: 400
+  max_new_tokens: 300
   do_sample: false
   temperature: 0.7
   top_p: 0.9

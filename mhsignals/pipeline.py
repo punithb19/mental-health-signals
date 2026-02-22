@@ -106,9 +106,29 @@ class MHSignalsPipeline:
         """
         cfg = load_pipeline_config(config_path)
 
+        # Validate checkpoint paths early
+        if not cfg.intent_checkpoint:
+            raise ValueError(
+                "intent_checkpoint is not set in pipeline config. "
+                "Train a classifier first and set its checkpoint path."
+            )
+        if not cfg.concern_checkpoint:
+            raise ValueError(
+                "concern_checkpoint is not set in pipeline config. "
+                "Train a classifier first and set its checkpoint path."
+            )
+
         # Load classifiers from saved checkpoints
         intent_clf = _load_classifier(cfg.intent_checkpoint)
         concern_clf = _load_classifier(cfg.concern_checkpoint)
+
+        # Apply intent threshold override from config if specified
+        if cfg.intent_threshold is not None and hasattr(intent_clf, "_threshold"):
+            logger.info(
+                "Overriding intent threshold: %.3f -> %.3f",
+                intent_clf._threshold, cfg.intent_threshold,
+            )
+            intent_clf._threshold = cfg.intent_threshold
 
         # Load retriever
         retriever = KBRetriever(
@@ -127,6 +147,7 @@ class MHSignalsPipeline:
             generator=generator,
             retriever_config=cfg.retriever,
             log_dir=cfg.log_dir,
+            enable_logging=cfg.enable_logging,
         )
 
     def __call__(self, post: str) -> Response:
@@ -144,14 +165,26 @@ class MHSignalsPipeline:
         return self.process(post)
 
     def process(self, post: str) -> Response:
-        """Process a single post through the full pipeline."""
+        """
+        Process a single post through the full pipeline.
 
-        # ---- Step 1: Crisis triage (fast, keyword-based) ----
-        # Run crisis detection first as a fast safety gate.
-        # Concern isn't known yet, so we detect without it initially.
-        crisis_preliminary = self.crisis_detector.detect(post, concern=None)
+        Args:
+            post: The user's post text. Must be non-empty.
 
-        if crisis_preliminary.level == "immediate":
+        Raises:
+            ValueError: If post is empty or whitespace-only.
+        """
+        if not post or not post.strip():
+            raise ValueError(
+                "Post text cannot be empty or whitespace-only. "
+                "Provide a meaningful post for classification."
+            )
+
+        # ---- Step 1: Keyword fast-path (explicit crisis phrases only) ----
+        # Catches the most unambiguous crisis language before ML inference.
+        # Only a tiny set of phrases (e.g., "suicide", "kill myself").
+        crisis_fast = self.crisis_detector.detect(post)
+        if crisis_fast.level == "immediate":
             crisis_reply = CrisisDetector.get_crisis_response("immediate")
             response = Response(
                 post=post,
@@ -173,8 +206,10 @@ class MHSignalsPipeline:
         concern = self.concern_clf.predict(post)
         logger.info("Predicted concern: %s", concern)
 
-        # ---- Re-check crisis with concern level ----
-        crisis = self.crisis_detector.detect(post, concern=concern)
+        # ---- Step 4: ML-driven crisis detection ----
+        # Uses intent tags (especially "Critical Risk") and concern level
+        # to detect crisis situations the keyword fast-path couldn't catch.
+        crisis = self.crisis_detector.detect(post, intents=intents, concern=concern)
 
         if crisis.is_crisis and crisis.level == "immediate":
             crisis_reply = CrisisDetector.get_crisis_response("immediate")

@@ -271,23 +271,26 @@ class LoRAIntentClassifier(BaseClassifier):
     def predict(self, text: str) -> List[str]:
         return self.predict_batch([text])[0]
 
-    def predict_batch(self, texts: List[str]) -> List[List[str]]:
+    def predict_proba(self, texts: List[str], batch_size: int = 16) -> np.ndarray:
+        """Return raw probability matrix (n_samples x n_labels) with mini-batching."""
         import torch
 
         self._model.eval()
-        enc = self._tokenizer(
-            texts, padding=True, truncation=True,
-            max_length=self._max_length, return_tensors="pt",
-        ).to(self._device)
+        all_probs = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            enc = self._tokenizer(
+                batch, padding=True, truncation=True,
+                max_length=self._max_length, return_tensors="pt",
+            ).to(self._device)
+            with torch.no_grad():
+                logits = self._model(**enc).logits
+            all_probs.append(torch.sigmoid(logits).cpu().numpy())
+        return np.vstack(all_probs)
 
-        with torch.no_grad():
-            logits = self._model(**enc).logits
-        probs = torch.sigmoid(logits).cpu().numpy()
-
-        results = []
-        for row in probs:
-            results.append(prob_to_tags(row, self._threshold, self._label_names))
-        return results
+    def predict_batch(self, texts: List[str]) -> List[List[str]]:
+        probs = self.predict_proba(texts)
+        return [prob_to_tags(row, self._threshold, self._label_names) for row in probs]
 
     def save(self, path: str) -> None:
         out = ensure_dir(Path(path))
@@ -305,18 +308,37 @@ class LoRAIntentClassifier(BaseClassifier):
     def load(cls, path: str) -> "LoRAIntentClassifier":
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
-        from peft import PeftModel
 
         p = Path(path)
         with open(p / "meta.json") as f:
             meta = json.load(f)
 
         tokenizer = AutoTokenizer.from_pretrained(str(p / "tokenizer"))
-        model = AutoModelForSequenceClassification.from_pretrained(
-            str(p / "model"),
-            num_labels=len(meta["label_names"]),
-            problem_type="multi_label_classification",
-        )
+
+        model_dir = p / "model"
+        adapter_config = model_dir / "adapter_config.json"
+
+        if adapter_config.exists():
+            # PEFT adapter checkpoint: load base model then apply adapter
+            import json as _json
+            with open(adapter_config) as f:
+                acfg = _json.load(f)
+            base_name = acfg.get("base_model_name_or_path", "distilroberta-base")
+            base_model = AutoModelForSequenceClassification.from_pretrained(
+                base_name,
+                num_labels=len(meta["label_names"]),
+                problem_type="multi_label_classification",
+            )
+            from peft import PeftModel
+            model = PeftModel.from_pretrained(base_model, str(model_dir))
+            model = model.merge_and_unload()
+        else:
+            # Full model checkpoint
+            model = AutoModelForSequenceClassification.from_pretrained(
+                str(model_dir),
+                num_labels=len(meta["label_names"]),
+                problem_type="multi_label_classification",
+            )
 
         device = "cpu"
         if torch.cuda.is_available():

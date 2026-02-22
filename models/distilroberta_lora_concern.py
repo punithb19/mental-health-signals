@@ -231,6 +231,22 @@ def main(args):
     with open(save_dir / "used_config.yaml", "w") as f: yaml.safe_dump(cfg, f)
     with open(save_dir / "data_config.yaml", "w") as f: yaml.safe_dump(data_cfg, f)
 
+    # Merge LoRA into base model so the full model (incl. classification head) is saved
+    merged_model = model.merge_and_unload()
+
+    # Save pipeline-compatible checkpoint (meta.json + model + tokenizer)
+    ckpt_dir = save_dir / "checkpoint"
+    ensure_dir(ckpt_dir)
+    merged_model.save_pretrained(str(ckpt_dir / "model"))
+    tokenizer.save_pretrained(str(ckpt_dir / "tokenizer"))
+    with open(ckpt_dir / "meta.json", "w") as f:
+        json.dump({
+            "type": "LoRAConcernClassifier",
+            "label_names": label_names,
+            "max_length": model_cfg.get("max_length", 512),
+        }, f, indent=2)
+    print(f"Pipeline checkpoint saved to: {ckpt_dir}")
+
     print(f"\n[DONE] Saved run to: {save_dir}")
     print(f"Test Metrics -> {json.dumps(test_metrics, indent=2)}")
     print(f"Train time (s): {time_elapsed:.2f}")

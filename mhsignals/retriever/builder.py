@@ -108,6 +108,12 @@ class KBBuilder:
         """
         csv_path = csv_path or os.path.join(self.config.raw_dir, "rag_intent_data_w_concern.csv")
 
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(
+                f"KB source CSV not found: {csv_path}. "
+                "Provide the correct path via --csv or in data.yaml."
+            )
+
         self._build_corpus(csv_path)
         self._encode_and_index(encoder_name, batch_size)
 

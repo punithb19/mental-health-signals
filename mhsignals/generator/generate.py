@@ -23,6 +23,9 @@ BANNED_PHRASES = [
     "i understand how you feel", "i've been there", "i can relate",
     "i went through", "stay strong", "you've got this",
     "sending prayers", "god bless", "bless you",
+    "i'm here", "i hope", "i wish", "i'm sorry",
+    "thank you for", "thanks for", "thank you so",
+    "keep me in", "thoughts and prayers",
 ]
 
 # Fallback response when generation fails
@@ -38,6 +41,15 @@ HIGH_CONCERN_FALLBACK = (
     "Given the intensity of what you're experiencing, it would be helpful to speak "
     "with a mental health professional who can provide personalized support. "
     "If you're in crisis, please reach out to a crisis helpline or emergency services."
+)
+
+POSITIVE_COPING_RESPONSE = (
+    "It's wonderful to hear that you're taking such positive steps for your "
+    "well-being. The strategies you're using -- like being mindful and reflective "
+    "-- are evidence-based approaches that many people find genuinely helpful. "
+    "The fact that you're already noticing improvements shows real commitment "
+    "to your mental health. Keep building on what's working for you, and "
+    "remember that consistency is key to lasting change."
 )
 
 
@@ -84,7 +96,7 @@ class ResponseGenerator:
         return requested
 
     def _build_bad_words_ids(self) -> List[List[int]]:
-        """Build token-ID lists for banned phrases."""
+        """Build token-ID lists for banned phrases and first-person tokens."""
         bad_words_ids = []
         for phrase in BANNED_PHRASES:
             try:
@@ -93,6 +105,18 @@ class ResponseGenerator:
                     bad_words_ids.append(ids)
             except Exception:
                 pass
+
+        # Ban standalone first-person pronoun "I" token to prevent
+        # the model from generating any first-person text
+        first_person_tokens = ["I", "I'm", "I've", "I'll", "I'd", "I am"]
+        for token in first_person_tokens:
+            try:
+                ids = self._tokenizer(token, add_special_tokens=False).input_ids
+                if ids:
+                    bad_words_ids.append(ids)
+            except Exception:
+                pass
+
         return bad_words_ids
 
     def generate(
@@ -116,6 +140,14 @@ class ResponseGenerator:
         Returns:
             Generated reply string (never None; returns fallback on failure).
         """
+        # Positive coping + low concern: the user is doing well; the KB has
+        # problem-oriented advice that would be inappropriate here, so return
+        # an affirming template directly.
+        if (intents and "Positive Coping" in intents
+                and concern and concern.lower() == "low"):
+            logger.info("Positive coping detected -- returning affirming response")
+            return POSITIVE_COPING_RESPONSE
+
         if not snippets:
             logger.warning("No snippets provided -- returning fallback.")
             if concern and concern.lower() == "high":
@@ -131,10 +163,9 @@ class ResponseGenerator:
 
         gen_kwargs = {
             "max_new_tokens": self._config.max_new_tokens,
-            "min_length": 20,
-            "max_length": 1024,
-            "length_penalty": 1.2,
-            "repetition_penalty": 1.1,
+            "min_new_tokens": 60,
+            "length_penalty": 1.5,
+            "repetition_penalty": 1.2,
             "no_repeat_ngram_size": 3,
             "early_stopping": True,
             "num_beams": 4,
@@ -154,18 +185,41 @@ class ResponseGenerator:
             })
 
         input_ids = self._tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=512
+            prompt, return_tensors="pt", truncation=True, max_length=768
         ).input_ids.to(self._device)
+
+        # Decoder seeding: force the model to start addressing the user
+        # directly, preventing echo/hallucination of the input
+        DECODER_SEEDS = [
+            "It sounds like you",
+            "What you're going through",
+            "Your feelings of",
+        ]
 
         best = None
         for attempt in range(max_attempts):
             try:
-                gen_ids = self._model.generate(input_ids, **gen_kwargs)
+                attempt_kwargs = gen_kwargs.copy()
+
+                # Use decoder seeding on each attempt with different starters
+                seed_text = DECODER_SEEDS[attempt % len(DECODER_SEEDS)]
+                decoder_ids = self._tokenizer(
+                    seed_text, add_special_tokens=False, return_tensors="pt"
+                ).input_ids.to(self._device)
+                attempt_kwargs["decoder_input_ids"] = decoder_ids
+
+                gen_ids = self._model.generate(input_ids, **attempt_kwargs)
                 reply = self._tokenizer.decode(gen_ids[0], skip_special_tokens=True).strip()
-                # Normalize: capitalize first letter so we don't reject good content on format alone
+
+                # Normalize: capitalize first letter
                 if reply and reply[0].islower():
                     reply = reply[0].upper() + reply[1:]
                 best = reply
+
+                # Clean up any instruction-leakage artifacts
+                cleaned = self._cleanup_response(reply)
+                if cleaned and len(cleaned) >= 40:
+                    reply = cleaned
 
                 if self._validator.is_valid(reply, post, snippets):
                     if self._validator.check_grounding(reply, snippets):
@@ -179,16 +233,16 @@ class ResponseGenerator:
 
                 # Add slight randomness for retries
                 if attempt > 0:
-                    gen_kwargs["temperature"] = 0.8 + (attempt * 0.15)
-                    gen_kwargs["do_sample"] = True
-                    gen_kwargs["num_beams"] = 1
+                    attempt_kwargs["temperature"] = 0.8 + (attempt * 0.15)
+                    attempt_kwargs["do_sample"] = True
+                    attempt_kwargs["num_beams"] = 1
 
             except Exception as e:
                 logger.error("Generation attempt %d failed: %s", attempt + 1, e)
 
         # Cleanup best attempt if available
         if best:
-            cleaned = self._cleanup_truncated(best)
+            cleaned = self._cleanup_response(best)
             if cleaned:
                 if cleaned[0].islower():
                     cleaned = cleaned[0].upper() + cleaned[1:]
@@ -197,11 +251,39 @@ class ResponseGenerator:
         logger.error("All generation attempts failed, returning fallback")
         if concern and concern.lower() == "high":
             return HIGH_CONCERN_FALLBACK
+        if intents and "Positive Coping" in intents and concern and concern.lower() == "low":
+            return POSITIVE_COPING_RESPONSE
         return FALLBACK_RESPONSE
 
     @staticmethod
-    def _cleanup_truncated(text: str) -> Optional[str]:
-        """Try to clean up a truncated response by finding the last full sentence."""
+    def _cleanup_response(text: str) -> Optional[str]:
+        """Clean up a generated response: strip artifacts and find last full sentence."""
+        if not text:
+            return None
+
+        # Strip common instruction-leakage and generic filler fragments
+        leakage_phrases = [
+            "Write a supportive", "Tell the person", "Use the advice",
+            "Thank you for", "Thanks again", "We'll be in touch",
+            "You're welcome", "We're here to",
+            "Keep me in your", "thoughts and prayers",
+            "Best of luck", "Good luck with",
+            "a pleasure working with", "been a pleasure",
+            "Let me know if you", "Feel free to",
+            "Don't hesitate to", "If you have any questions",
+        ]
+        lines = text.split(". ")
+        clean_lines = []
+        for line in lines:
+            if not any(lp.lower() in line.lower() for lp in leakage_phrases):
+                clean_lines.append(line)
+        text = ". ".join(clean_lines)
+
+        # Ensure ends with proper punctuation
+        text = text.strip()
+        if not text:
+            return None
+
         if re.search(r"[.!?]\s*$", text):
             return text
 

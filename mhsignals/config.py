@@ -59,10 +59,12 @@ class PipelineConfig:
     """Full end-to-end pipeline configuration."""
     intent_checkpoint: str = ""
     concern_checkpoint: str = ""
+    intent_threshold: Optional[float] = None  # Override classifier's saved threshold
     kb: KBConfig = field(default_factory=KBConfig)
     retriever: RetrieverConfig = field(default_factory=RetrieverConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
     log_dir: str = "logs/interactions"
+    enable_logging: bool = True
     seed: int = 42
 
 
@@ -160,12 +162,17 @@ def load_pipeline_config(path: str) -> PipelineConfig:
         max_prompt_chars=int(gen_raw.get("max_prompt_chars", 2000)),
     )
 
+    intent_threshold_raw = raw.get("intent_threshold", None)
+    intent_threshold = float(intent_threshold_raw) if intent_threshold_raw is not None else None
+
     return PipelineConfig(
         intent_checkpoint=raw.get("intent_checkpoint", ""),
         concern_checkpoint=raw.get("concern_checkpoint", ""),
+        intent_threshold=intent_threshold,
         kb=kb,
         retriever=retriever,
         generator=generator,
         log_dir=raw.get("log_dir", "logs/interactions"),
+        enable_logging=bool(raw.get("enable_logging", True)),
         seed=int(raw.get("seed", 42)),
     )

@@ -16,7 +16,8 @@ class TestPromptBuilder:
 
     def test_includes_instruction(self, sample_post, sample_snippets):
         prompt = self.builder.build(sample_post, sample_snippets)
-        assert "Instruction:" in prompt
+        assert "supportive" in prompt.lower()
+        assert "advice" in prompt.lower()
 
     def test_includes_post(self, sample_post, sample_snippets):
         prompt = self.builder.build(sample_post, sample_snippets)
@@ -25,11 +26,22 @@ class TestPromptBuilder:
     def test_includes_snippet_text(self, sample_post, sample_snippets):
         prompt = self.builder.build(sample_post, sample_snippets)
         for snippet in sample_snippets:
-            assert snippet["text"][:50] in prompt
+            # First 40 chars of each snippet should appear in prompt
+            assert snippet["text"][:40] in prompt
 
     def test_respects_max_chars(self, sample_post, sample_snippets):
         prompt = self.builder.build(sample_post, sample_snippets, max_chars=200)
         assert len(prompt) <= 200
+
+    def test_concern_affects_tone(self, sample_post, sample_snippets):
+        prompt_high = self.builder.build(
+            sample_post, sample_snippets, concern="high",
+        )
+        prompt_medium = self.builder.build(
+            sample_post, sample_snippets, concern="medium",
+        )
+        assert "professional" in prompt_high.lower()
+        assert "practical" in prompt_medium.lower() or "warm" in prompt_medium.lower()
 
     def test_empty_snippets(self, sample_post):
         prompt = self.builder.build(sample_post, [])

@@ -51,6 +51,79 @@ class TestGradeBoundaries:
         assert boundaries[-1] == (0.00, "F")
 
 
+class TestEvaluateFileEdgeCases:
+    """Test evaluate_file robustness: missing files, empty files, malformed lines."""
+
+    def _make_evaluator(self):
+        """Create evaluator without loading the real encoder (mock it)."""
+        from unittest.mock import MagicMock, patch
+        import numpy as np
+
+        with patch("mhsignals.evaluation.metrics.SentenceTransformer") as MockST:
+            mock_encoder = MagicMock()
+            mock_encoder.encode.return_value = np.random.randn(1, 384).astype(np.float32)
+            MockST.return_value = mock_encoder
+            return ReplyQualityEvaluator()
+
+    def test_missing_file_raises(self):
+        evaluator = self._make_evaluator()
+        with pytest.raises(FileNotFoundError):
+            evaluator.evaluate_file("/nonexistent/path/preds.jsonl")
+
+    def test_empty_file_returns_empty(self, tmp_path):
+        pred_file = tmp_path / "empty.jsonl"
+        pred_file.write_text("")
+        evaluator = self._make_evaluator()
+        results = evaluator.evaluate_file(str(pred_file))
+        assert results == []
+
+    def test_malformed_json_skipped(self, tmp_path):
+        pred_file = tmp_path / "bad.jsonl"
+        pred_file.write_text(
+            '{"post": "valid post", "reply": "A valid reply here.", "citations": []}\n'
+            'not valid json\n'
+            '{"post": "another valid", "reply": "Another good reply.", "citations": []}\n'
+        )
+        evaluator = self._make_evaluator()
+        results = evaluator.evaluate_file(str(pred_file))
+        assert len(results) == 2
+
+    def test_missing_post_field_skipped(self, tmp_path):
+        pred_file = tmp_path / "no_post.jsonl"
+        pred_file.write_text(
+            '{"reply": "A reply without post.", "citations": []}\n'
+            '{"post": "has post", "reply": "A valid reply here.", "citations": []}\n'
+        )
+        evaluator = self._make_evaluator()
+        results = evaluator.evaluate_file(str(pred_file))
+        assert len(results) == 1
+        assert results[0]["post"].startswith("has post")
+
+    def test_empty_post_field_skipped(self, tmp_path):
+        pred_file = tmp_path / "empty_post.jsonl"
+        pred_file.write_text(
+            '{"post": "", "reply": "Reply to nothing.", "citations": []}\n'
+            '{"post": "real post", "reply": "Real reply here.", "citations": []}\n'
+        )
+        evaluator = self._make_evaluator()
+        results = evaluator.evaluate_file(str(pred_file))
+        assert len(results) == 1
+
+    def test_mixed_valid_invalid(self, tmp_path):
+        pred_file = tmp_path / "mixed.jsonl"
+        lines = [
+            '{"post": "ok1", "reply": "Reply one is valid.", "citations": []}',
+            'broken json',
+            '{"no_post_key": true}',
+            '',
+            '{"post": "ok2", "reply": "Reply two is valid.", "citations": []}',
+        ]
+        pred_file.write_text("\n".join(lines) + "\n")
+        evaluator = self._make_evaluator()
+        results = evaluator.evaluate_file(str(pred_file))
+        assert len(results) == 2
+
+
 @pytest.mark.slow
 class TestScoreReply:
     @pytest.fixture(autouse=True)

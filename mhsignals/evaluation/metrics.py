@@ -12,6 +12,7 @@ Produces per-reply scores + aggregate report with letter grades.
 
 import json
 import re
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -168,13 +169,38 @@ class ReplyQualityEvaluator:
         """
         Evaluate a JSONL prediction file.
 
-        Each line must have: post, reply, citations (list of snippet dicts).
+        Each line should have: post, reply, citations (list of snippet dicts).
+        Malformed lines or lines missing 'post' are skipped with a warning.
+        File must be UTF-8 encoded.
+
+        Returns:
+            List of score dicts, one per valid row.
         """
+        import sys
+
+        if not Path(pred_path).exists():
+            raise FileNotFoundError(f"Prediction file not found: {pred_path}")
+
         results = []
-        with open(pred_path) as f:
-            for line in f:
-                item = json.loads(line)
-                post = item["post"]
+        n_skipped = 0
+        with open(pred_path, encoding="utf-8") as f:
+            for line_no, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print(f"[WARN] Skipping malformed JSON at line {line_no}: {e}", file=sys.stderr)
+                    n_skipped += 1
+                    continue
+
+                post = item.get("post")
+                if not post:
+                    print(f"[WARN] Skipping line {line_no}: missing or empty 'post' field.", file=sys.stderr)
+                    n_skipped += 1
+                    continue
 
                 if "rag_output" in item:
                     reply = item["rag_output"].get("reply", "")
@@ -186,6 +212,9 @@ class ReplyQualityEvaluator:
                 scores = self.score_reply(post, reply, snippets)
                 scores["post"] = post[:100]
                 results.append(scores)
+
+        if n_skipped > 0:
+            print(f"[INFO] Skipped {n_skipped} invalid line(s) out of {line_no}.", file=sys.stderr)
 
         return results
 

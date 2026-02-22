@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Crisis levels and keywords
+# Crisis levels and detection
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -30,19 +30,43 @@ class CrisisResult:
     level: str  # "immediate", "high", "medium", "none"
 
 
+# ---------------------------------------------------------------------------
+# Crisis keywords (safety net) + ML signals
+# ---------------------------------------------------------------------------
+#
+# Why keywords exist alongside ML classifiers:
+#   The intent classifier may not predict "Critical Risk" reliably --
+#   it depends on training data quality and model capacity. Keywords
+#   provide a deterministic safety net so that unambiguous crisis
+#   language is NEVER missed. The ML classifiers (intent + concern)
+#   provide ADDITIONAL detection for paraphrased or subtle language
+#   that keywords can't cover.
+#
+# Hybrid strategy:
+#   1. Keywords catch explicit crisis phrases → immediate/high
+#   2. ML signals (Critical Risk intent, high concern) catch
+#      what keywords miss → immediate/high/medium
+#   3. Both layers run; whichever is more severe wins.
+
 IMMEDIATE_KEYWORDS = [
-    "kill myself", "end my life", "suicide",
+    "kill myself", "end my life", "end it all", "suicide",
     "take my life", "overdose", "gonna jump",
     "going to jump", "planning to die", "planning to kill myself",
-    "wrote a note", "saying goodbye",
+    "wrote a note", "saying goodbye", "want to end it",
+    "don't want to be alive", "don't want to live",
+    "don't want to exist", "ready to die",
 ]
 
 HIGH_RISK_KEYWORDS = [
     "want to die", "cut myself", "cutting myself", "self-harm", "harm myself",
     "cut my", "cutting my",
-    "better off dead", "everyone would be better", "no reason to live",
-    "nothing to live for", "can't do this anymore", "give up", "hanging", "pills",
-    "can't go on",
+    "better off dead", "better off without me", "better without me",
+    "everyone would be better", "world would be better",
+    "no reason to live", "nothing to live for",
+    "can't do this anymore", "hanging", "pills",
+    "can't go on", "no one cares", "nobody cares",
+    "wish i was dead", "wish i were dead", "rather be dead",
+    "don't see myself being here", "no future",
 ]
 
 MEDIUM_RISK_KEYWORDS = [
@@ -56,40 +80,103 @@ MEDIUM_RISK_KEYWORDS = [
 # ---------------------------------------------------------------------------
 
 class CrisisDetector:
-    """Detect crisis severity from post text and predicted concern level."""
+    """
+    Hybrid crisis detection: keyword safety net + ML classifier signals.
 
-    def detect(self, post: str, concern: Optional[str] = None) -> CrisisResult:
+    Keywords provide deterministic coverage for known crisis phrases.
+    ML classifiers (intent tags + concern level) provide generalization
+    to paraphrased or subtle crisis language.
+    """
+
+    def detect(
+        self,
+        post: str,
+        intents: Optional[List[str]] = None,
+        concern: Optional[str] = None,
+    ) -> CrisisResult:
         """
-        Multi-tier crisis detection.
+        Multi-tier crisis detection combining keywords + ML signals.
+
+        Can be called in two modes:
+          - Pre-classification (intents/concern=None): keywords only
+          - Post-classification (with intents/concern): full hybrid
 
         Args:
-            post:    The user's post text.
-            concern: Predicted concern level (from classifier), e.g. "high".
+            post:     The user's post text.
+            intents:  Predicted intent tags (may include "Critical Risk").
+            concern:  Predicted concern level ("low", "medium", "high").
 
         Returns:
             CrisisResult with is_crisis and level.
         """
         post_lower = post.lower()
 
-        # Tier 1: Immediate danger
-        if any(kw in post_lower for kw in IMMEDIATE_KEYWORDS):
+        # --- Layer 1: Keyword safety net ---
+        keyword_level = self._keyword_check(post_lower, concern)
+
+        # --- Layer 2: ML-driven signals ---
+        ml_level = self._ml_check(intents, concern)
+
+        # Take the more severe of the two layers
+        level = self._max_severity(keyword_level, ml_level)
+
+        if level == "immediate":
             return CrisisResult(is_crisis=True, level="immediate")
-
-        # Concern-level override
-        if concern and concern.lower() == "high":
-            if any(kw in post_lower for kw in HIGH_RISK_KEYWORDS + IMMEDIATE_KEYWORDS):
-                return CrisisResult(is_crisis=True, level="immediate")
+        elif level == "high":
             return CrisisResult(is_crisis=True, level="high")
-
-        # Tier 2: High risk
-        if any(kw in post_lower for kw in HIGH_RISK_KEYWORDS):
-            return CrisisResult(is_crisis=True, level="high")
-
-        # Tier 3: Medium risk
-        if any(kw in post_lower for kw in MEDIUM_RISK_KEYWORDS):
+        elif level == "medium":
             return CrisisResult(is_crisis=False, level="medium")
-
         return CrisisResult(is_crisis=False, level="none")
+
+    @staticmethod
+    def _keyword_check(post_lower: str, concern: Optional[str] = None) -> str:
+        """Determine crisis level from keyword matching."""
+        concern_high = concern is not None and concern.lower() == "high"
+
+        if any(kw in post_lower for kw in IMMEDIATE_KEYWORDS):
+            return "immediate"
+
+        if any(kw in post_lower for kw in HIGH_RISK_KEYWORDS):
+            return "immediate" if concern_high else "high"
+
+        if any(kw in post_lower for kw in MEDIUM_RISK_KEYWORDS):
+            return "high" if concern_high else "medium"
+
+        if concern_high:
+            return "medium"
+
+        return "none"
+
+    @staticmethod
+    def _ml_check(
+        intents: Optional[List[str]],
+        concern: Optional[str],
+    ) -> str:
+        """Determine crisis level from ML classifier outputs."""
+        if intents is None:
+            return "none"
+
+        has_critical_risk = "Critical Risk" in intents
+        has_distress = "Mental Distress" in intents
+        concern_high = concern is not None and concern.lower() == "high"
+        concern_medium = concern is not None and concern.lower() == "medium"
+
+        if has_critical_risk and concern_high:
+            return "immediate"
+        if has_critical_risk:
+            return "high"
+        if concern_high and has_distress:
+            return "high"
+        if concern_medium and has_distress:
+            return "medium"
+
+        return "none"
+
+    @staticmethod
+    def _max_severity(a: str, b: str) -> str:
+        """Return the more severe of two crisis levels."""
+        order = {"none": 0, "medium": 1, "high": 2, "immediate": 3}
+        return a if order.get(a, 0) >= order.get(b, 0) else b
 
     @staticmethod
     def get_crisis_response(level: str) -> str:
@@ -141,8 +228,16 @@ class ResponseValidator:
         "my wife", "my boyfriend", "my girlfriend", "my children",
         "my kids", "my son", "my daughter", "my family", "my parents",
         "i have children", "i have kids", "i'm married", "i am married",
-        "i think", "i believe", "i would", "i will", "i'd like", "i'd be happy",
-        "i want", "what can i say",
+        "what can i say",
+    ]
+
+    # Regex patterns for first-person speech (assistant should not use "I")
+    FIRST_PERSON_PATTERNS = [
+        r"\bi'm\b", r"\bi am\b", r"\bi've\b", r"\bi have\b",
+        r"\bi was\b", r"\bi will\b", r"\bi would\b", r"\bi can\b",
+        r"\bi know\b", r"\bi think\b", r"\bi believe\b",
+        r"\bi feel\b", r"\bi want\b", r"\bi need\b",
+        r"\bi'd\b", r"\bi'll\b",
     ]
 
     TOXIC_MARKERS = [
@@ -152,7 +247,7 @@ class ResponseValidator:
         "you deserve to feel", "you are a burden",
         "[name]", "[insert", "counseling session", "our session",
         "in our meeting", "previous session",
-        "therapist", "counselor", "my goal as a",
+        "my goal as a", "as your therapist", "as your counselor",
         "justified", "hero", "you will not be a hero",
     ]
 
@@ -187,17 +282,42 @@ class ResponseValidator:
             logger.warning("Persona/first-person hallucination detected")
             return False
 
+        # Check for first-person speech patterns (assistant should not say "I")
+        first_person_count = sum(
+            1 for pat in self.FIRST_PERSON_PATTERNS if re.search(pat, rl)
+        )
+        if first_person_count >= 2:
+            logger.warning("First-person speech detected (%d patterns)", first_person_count)
+            return False
+
         if any(m in rl for m in self.TOXIC_MARKERS):
             logger.warning("Toxic content detected")
             return False
 
-        if "**" in reply or reply.count("-") > 6 or reply.count("\u2022") > 4:
+        # Reject hallucinated contact info (phone numbers, emails, URLs)
+        if re.search(r"\(\d{3}\)\s*\d{3}[-.]?\d{4}", reply):
+            logger.warning("Hallucinated phone number detected")
+            return False
+        if re.search(r"[\w.-]+@[\w.-]+\.\w{2,}", reply):
+            logger.warning("Hallucinated email address detected")
+            return False
+        if re.search(r"http[s]?://(?!findahelpline)", rl):
+            logger.warning("Hallucinated URL detected")
+            return False
+
+        if "**" in reply or reply.count("\u2022") > 4:
             logger.warning("List formatting detected (likely copied)")
+            return False
+
+        # Reject numbered lists like "1. ... 2. ... 3. ..."
+        numbered_items = re.findall(r"(?:^|\n)\s*\d+\.\s", reply)
+        if len(numbered_items) > 3:
+            logger.warning("Numbered list detected (%d items)", len(numbered_items))
             return False
 
         sents = re.split(r"[.!?]+", reply)
         valid_sents = [s for s in sents if len(s.strip()) > 10]
-        if len(valid_sents) < 2 and len(reply) < 60:
+        if len(valid_sents) < 2 and len(reply) < 80:
             logger.warning("Too few sentences: %d", len(valid_sents))
             return False
 

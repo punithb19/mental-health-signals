@@ -55,17 +55,26 @@ def main():
         print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "intent" and args.encoder == "lora":
-        print("Training: LoRA Intent Classifier (RoBERTa)")
-        from models.roberta_lora import main as lora_intent_main
-        sys.argv = ["train.py", "--config", args.config]
-        lora_intent_main()
+        # Detect model from config to choose the right training script
+        model_name = config.get("model", {}).get("name", "")
+        if "distilroberta" in model_name.lower():
+            print("Training: LoRA Intent Classifier (DistilRoBERTa)")
+            from models.distilroberta_lora import main as lora_intent_main
+        else:
+            print("Training: LoRA Intent Classifier (RoBERTa)")
+            from models.roberta_lora import main as lora_intent_main
+        lora_intent_main(args)
         print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "concern" and args.encoder == "lora":
-        print("Training: LoRA Concern Classifier (RoBERTa)")
-        from models.roberta_lora_concern import main as lora_concern_main
-        sys.argv = ["train.py", "--config", args.config]
-        lora_concern_main()
+        model_name = config.get("model", {}).get("name", "")
+        if "distilroberta" in model_name.lower():
+            print("Training: LoRA Concern Classifier (DistilRoBERTa)")
+            from models.distilroberta_lora_concern import main as lora_concern_main
+        else:
+            print("Training: LoRA Concern Classifier (RoBERTa)")
+            from models.roberta_lora_concern import main as lora_concern_main
+        lora_concern_main(args)
         print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
 
