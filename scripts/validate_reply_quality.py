@@ -30,11 +30,11 @@ warnings.warn(
     stacklevel=1,
 )
 
-import json
-import argparse
-import numpy as np
-import re
-from sentence_transformers import SentenceTransformer
+import json  # noqa: E402
+import argparse  # noqa: E402
+import numpy as np  # noqa: E402
+import re  # noqa: E402
+from sentence_transformers import SentenceTransformer  # noqa: E402
 
 
 # ================================================================
@@ -137,7 +137,7 @@ def hybrid_grounding_score(reply, snippets, encoder):
     return max(0.05, min(1.0, final))
 
 def smooth_relevance(score):
-    # maps low scores into a softer curve: 
+    # maps low scores into a softer curve:
     # e.g., 0.05 → 0.25, 0.10 → 0.35, 0.20 → 0.55
     return min(1.0, (score + 0.1) * 1.5)
 
@@ -198,7 +198,7 @@ def main():
             raw_rel = float((post_vec * reply_vec).sum())
             relevance = smooth_relevance(raw_rel)
             if raw_rel < 0.03:
-                relevance *= 0.5  
+                relevance *= 0.5
 
             # ---------- (2) Grounding ----------
             grounding = hybrid_grounding_score(reply, snippets, encoder)
@@ -222,11 +222,16 @@ def main():
             )
 
             # grade boundaries
-            if final >= 0.78: grade = "A"
-            elif final >= 0.62: grade = "B"
-            elif final >= 0.48: grade = "C"
-            elif final >= 0.32: grade = "D"
-            else: grade = "F"
+            if final >= 0.78:
+                grade = "A"
+            elif final >= 0.62:
+                grade = "B"
+            elif final >= 0.48:
+                grade = "C"
+            elif final >= 0.32:
+                grade = "D"
+            else:
+                grade = "F"
 
             results.append({
                 "post": post[:100],

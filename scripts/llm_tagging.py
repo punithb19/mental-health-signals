@@ -157,7 +157,7 @@ def main(input_path, output_dataset, output_evaluation, batch_size):
     # --- Model Pipeline ---
     print("Setting up model pipeline...")
     warnings.filterwarnings("ignore", ".*Using a pipeline without specifying a model name.*")
-    
+
     device = 0 if torch.cuda.is_available() else -1
     print(f"Using device: {'GPU (cuda:0)' if device == 0 else 'CPU'}")
     if device == -1:
@@ -165,7 +165,7 @@ def main(input_path, output_dataset, output_evaluation, batch_size):
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     classifier = pipeline("zero-shot-classification", model=MODEL_NAME, device=device)
-    
+
     def truncate_text(text):
         tokens = tokenizer(
             text, truncation=True, max_length=tokenizer.model_max_length - 2
@@ -174,18 +174,18 @@ def main(input_path, output_dataset, output_evaluation, batch_size):
 
     # --- Preparing Data ---
     df = pd.read_csv(input_path)
-    
+
     # Rename 'Post' to 'Text' if it exists, for consistency
     if 'Post' in df.columns and 'Text' not in df.columns:
         df = df.rename(columns={'Post': 'Text'})
-        
+
     df["Text"] = df["Text"].fillna("").astype(str)
     df["Tag"] = df["Tag"].fillna("").astype(str)
     df["Truncated_Text"] = df["Text"].apply(truncate_text)
 
     df_labeled = df[df['Tag'] != ""].copy()
     df_unlabeled = df[df['Tag'] == ""].copy()
-    
+
     print(f"Found {len(df_labeled)} manually labeled posts.")
     print(f"Found {len(df_unlabeled)} unlabeled posts to tag.")
 
@@ -199,8 +199,8 @@ def main(input_path, output_dataset, output_evaluation, batch_size):
         mlb = MultiLabelBinarizer(classes=ALL_LABELS)
         y_true = mlb.fit_transform(df_labeled['Human_Tags'])
         y_true_bin_df = pd.DataFrame(y_true, columns=mlb.classes_)
-    
-        # Get model raw scores  
+
+        # Get model raw scores
         texts_to_eval = df_labeled['Truncated_Text'].tolist()
         model_scores_list = get_model_scores(texts_to_eval, classifier, batch_size)
         y_pred_scores_df = pd.DataFrame(model_scores_list)
@@ -220,7 +220,7 @@ def main(input_path, output_dataset, output_evaluation, batch_size):
             zero_division=0
         )
         print(report)
-        
+
         eval_cols = ['Text', 'Human_Tags', 'Model_Tags']
         df_labeled[eval_cols].to_csv(output_evaluation, index=False, encoding="utf-8")
         print(f"Saved side-by-side evaluation to: {output_evaluation}")
@@ -229,15 +229,15 @@ def main(input_path, output_dataset, output_evaluation, batch_size):
         df_labeled['Final_Tags'] = df_labeled['Human_Tags'] # Use human tags as final
         df_labeled['Tag_Source'] = 'Human_Gold'
         final_labeled_rows = df_labeled
-        
+
     # --- Process Unlabeled Set for Tagging ---
     if not df_unlabeled.empty:
         print("\n--- Tagging Unlabeled Set ---")
         texts_to_tag = df_unlabeled['Truncated_Text'].tolist()
-        
+
         model_scores_list_new = get_model_scores(texts_to_tag, classifier, batch_size)
         y_pred_scores_df_new = pd.DataFrame(model_scores_list_new)
-        
+
         print("\nApplying optimal thresholds to unlabeled data...")
         model_tags_new = apply_thresholds(y_pred_scores_df_new, optimal_thresholds)
 

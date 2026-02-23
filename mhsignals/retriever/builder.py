@@ -31,7 +31,7 @@ def _sentish_split(text: str) -> List[str]:
 
 def chunk_text(text: str, target_tokens: int = 140, min_chars: int = 20) -> List[str]:
     """Break long text into chunks of ~target_tokens using sentence boundaries."""
-    tokens = lambda s: len(s.split())
+    def tokens(s): return len(s.split())
     sents = _sentish_split(text)
     if not sents:
         return []

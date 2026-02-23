@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-import os, json, argparse
+import os
+import json
+import argparse
 from pathlib import Path
 
 import faiss

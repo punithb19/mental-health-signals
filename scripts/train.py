@@ -12,7 +12,6 @@ For LoRA-based training (requires GPU/MPS):
 """
 
 import argparse
-import sys
 
 from mhsignals.config import load_yaml
 
@@ -45,13 +44,13 @@ def main():
     if args.task == "intent" and args.encoder == "minilm_lr":
         from mhsignals.classifiers.intent import MinilmLRIntentClassifier
         print("Training: MinilmLR Intent Classifier")
-        clf = MinilmLRIntentClassifier.train(config)
+        MinilmLRIntentClassifier.train(config)
         print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "concern" and args.encoder == "minilm_lr":
         from mhsignals.classifiers.concern import MinilmLRConcernClassifier
         print("Training: MinilmLR Concern Classifier")
-        clf = MinilmLRConcernClassifier.train(config)
+        MinilmLRConcernClassifier.train(config)
         print("Model saved. Use the checkpoint path for pipeline.yaml.")
 
     elif args.task == "intent" and args.encoder == "lora":

@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 import argparse
 import sys
-import os
 
 def load_jsonl(path):
     rows = []

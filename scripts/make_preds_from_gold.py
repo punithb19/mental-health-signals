@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-import argparse, json, subprocess, sys, time, re
+import argparse
+import json
+import subprocess
+import sys
+import time
+import re
 from pathlib import Path
 from collections import Counter
 

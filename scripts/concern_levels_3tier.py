@@ -1,4 +1,5 @@
-import sys, pandas as pd
+import sys
+import pandas as pd
 
 in_path  = sys.argv[1] if len(sys.argv) > 1 else "this_tagged.csv"
 out_path = sys.argv[2] if len(sys.argv) > 2 else "this_with_concern.csv"
@@ -22,9 +23,12 @@ def concern_from_tags(tags_str: str):
 
     if "critical risk" in tl:
         notes = []
-        if "maladaptive coping" in tl: notes.append("with Maladaptive Coping")
-        if "progress update" in tl:    notes.append("with Progress Update")
-        if "seeking help" in tl:       notes.append("and Seeking Help")
+        if "maladaptive coping" in tl:
+            notes.append("with Maladaptive Coping")
+        if "progress update" in tl:
+            notes.append("with Progress Update")
+        if "seeking help" in tl:
+            notes.append("and Seeking Help")
         reason = "Critical Risk"
         return "High", reason, ("; ".join(notes) if notes else "")
 
@@ -43,7 +47,9 @@ def concern_from_tags(tags_str: str):
 levels, reasons, notes = [], [], []
 for s in df[tag_col].astype(str):
     L, R, N = concern_from_tags(s)
-    levels.append(L); reasons.append(R); notes.append(N)
+    levels.append(L)
+    reasons.append(R)
+    notes.append(N)
 
 df.insert(len(df.columns), "Concern_Level", levels)
 

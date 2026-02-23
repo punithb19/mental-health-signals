@@ -1,4 +1,6 @@
-import pandas as pd, yaml, os
+import pandas as pd
+import yaml
+import os
 from collections import Counter
 
 CANON = [

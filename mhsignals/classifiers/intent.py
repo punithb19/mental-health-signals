@@ -10,7 +10,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 import joblib
 import numpy as np
@@ -28,7 +28,6 @@ from ..data import (
     read_intent_split,
     set_seed,
 )
-from ..config import load_yaml
 
 
 # ---------------------------------------------------------------------------

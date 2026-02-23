@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import faiss
-import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from .filters import filter_unsafe_snippets
@@ -120,14 +119,14 @@ class KBRetriever:
         except Exception:
             pass
 
-        D, I = self._index.search(qv, topk)
+        distances, indices = self._index.search(qv, topk)
 
         candidates = []
-        for rank, idx in enumerate(I[0]):
+        for rank, idx in enumerate(indices[0]):
             if idx < 0 or idx >= len(self._meta):
                 continue
 
-            similarity = float(D[0][rank])
+            similarity = float(distances[0][rank])
             if similarity < min_similarity:
                 continue
 

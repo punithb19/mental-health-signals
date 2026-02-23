@@ -6,11 +6,10 @@ run normally. Tests that need the encoder are marked @pytest.mark.slow.
 """
 
 import json
-import tempfile
 
 import pytest
 
-from mhsignals.evaluation.metrics import ReplyQualityEvaluator, SAFETY_VIOLATIONS, CRISIS_KEYWORDS
+from mhsignals.evaluation.metrics import ReplyQualityEvaluator
 
 
 class TestSafetyScore:

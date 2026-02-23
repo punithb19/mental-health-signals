@@ -17,7 +17,7 @@ _root = Path(__file__).resolve().parents[1]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from mhsignals.evaluation.metrics import ReplyQualityEvaluator
+from mhsignals.evaluation.metrics import ReplyQualityEvaluator  # noqa: E402
 
 
 def main():

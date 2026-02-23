@@ -13,12 +13,11 @@ Produces per-reply scores + aggregate report with letter grades.
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from ..generator.safety import CrisisDetector
 
 # Crisis / safety keyword lists (for evaluation only)
 CRISIS_KEYWORDS = [

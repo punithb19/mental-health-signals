@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-import os, re, json, argparse
+import os
+import re
+import json
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -19,7 +22,7 @@ def sentish_split(text: str):
 
 def chunk_text(text: str, target_tokens: int = 140, min_chars: int = 20):
     """Break long text into chunks of ~target_tokens using sentence boundaries"""
-    tokens = lambda s: len(s.split())
+    def tokens(s): return len(s.split())
     sents = sentish_split(text)
     if not sents:
         return []

@@ -2,8 +2,6 @@
 Tests for mhsignals.config — YAML loading and config dataclasses.
 """
 
-import tempfile
-from pathlib import Path
 
 import yaml
 

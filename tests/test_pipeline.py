@@ -5,11 +5,10 @@ These tests verify pipeline orchestration, crisis detection paths,
 and input validation without loading real ML models.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from mhsignals.generator.safety import CrisisDetector, CrisisResult, ResponseValidator
 from mhsignals.pipeline import MHSignalsPipeline, Response
 
 

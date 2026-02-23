@@ -1,1 +1,1 @@
-from .metrics import ReplyQualityEvaluator
+from .metrics import ReplyQualityEvaluator as ReplyQualityEvaluator

@@ -17,8 +17,8 @@ _root = Path(__file__).resolve().parents[1]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from mhsignals.config import load_data_config, load_pipeline_config
-from mhsignals.retriever.builder import KBBuilder
+from mhsignals.config import load_data_config, load_pipeline_config  # noqa: E402
+from mhsignals.retriever.builder import KBBuilder  # noqa: E402
 
 
 def main():

@@ -33,11 +33,11 @@ def search(index, encoder, meta, query, intents=None, concern=None, topk=50, kee
 
     # encode query
     qv = encoder.encode([query], normalize_embeddings=True).astype("float32")
-    D, I = index.search(qv, topk)
+    distances, indices = index.search(qv, topk)
 
     # filter + collect
     out = []
-    for rank, idx in enumerate(I[0]):
+    for rank, idx in enumerate(indices[0]):
         m = meta[idx]
         ok = True
         if intents:
@@ -48,7 +48,7 @@ def search(index, encoder, meta, query, intents=None, concern=None, topk=50, kee
             continue
         out.append({
             "rank": len(out) + 1,
-            "score": float(D[0][rank]),
+            "score": float(distances[0][rank]),
             "doc_id": m.get("doc_id", ""),
             "intent": m.get("intent", ""),
             "concern": m.get("concern", ""),

@@ -35,19 +35,18 @@ _root = Path(__file__).resolve().parents[1]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-import numpy as np
-from sklearn.metrics import (
+import numpy as np  # noqa: E402
+from sklearn.metrics import (  # noqa: E402
     accuracy_score,
     average_precision_score,
-    classification_report,
     confusion_matrix,
     f1_score,
 )
-from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.preprocessing import MultiLabelBinarizer  # noqa: E402
 
-from mhsignals.config import load_pipeline_config, load_yaml
-from mhsignals.data import CANON_KEYS, CONCERN_LABELS, read_concern_split, read_intent_split
-from mhsignals.pipeline import _load_classifier
+from mhsignals.config import load_pipeline_config, load_yaml  # noqa: E402
+from mhsignals.data import CANON_KEYS, read_concern_split, read_intent_split  # noqa: E402
+from mhsignals.pipeline import _load_classifier  # noqa: E402
 
 
 def evaluate_intent(clf, df, label_names, threshold=None):
@@ -248,7 +247,7 @@ def main():
         print(f"  Micro F1:     {intent_metrics['micro_f1']}")
         if "pr_auc_macro" in intent_metrics:
             print(f"  PR-AUC Macro: {intent_metrics['pr_auc_macro']}")
-        print(f"\n  Per-label F1:")
+        print("\n  Per-label F1:")
         for tag, f1 in intent_metrics["per_label_f1"].items():
             prec = intent_metrics["per_label_precision"][tag]
             rec = intent_metrics["per_label_recall"][tag]
@@ -284,10 +283,10 @@ def main():
         print(f"{'='*50}")
         print(f"  Accuracy:  {concern_metrics['accuracy']}")
         print(f"  Macro F1:  {concern_metrics['macro_f1']}")
-        print(f"\n  Per-label F1:")
+        print("\n  Per-label F1:")
         for label, f1 in concern_metrics["per_label_f1"].items():
             print(f"    {label:<10s}  F1={f1:.4f}")
-        print(f"\n  Confusion matrix (rows=true, cols=pred):")
+        print("\n  Confusion matrix (rows=true, cols=pred):")
         print(f"    Labels: {concern_metrics['label_order']}")
         for row in concern_metrics["confusion_matrix"]:
             print(f"    {row}")

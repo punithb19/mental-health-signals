@@ -2,9 +2,8 @@
 Tests for mhsignals.generator.safety — CrisisDetector and ResponseValidator.
 """
 
-import pytest
 
-from mhsignals.generator.safety import CrisisDetector, CrisisResult, ResponseValidator
+from mhsignals.generator.safety import CrisisDetector, ResponseValidator
 
 
 class TestCrisisDetector:

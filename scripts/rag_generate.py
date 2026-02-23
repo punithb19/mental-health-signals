@@ -26,11 +26,11 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 warnings.filterwarnings("ignore", message=r"resource_tracker: There appear to be \d+ leaked semaphore")
 
-import yaml
-import faiss
-import torch
-from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import yaml  # noqa: E402
+import faiss  # noqa: E402
+import torch  # noqa: E402
+from sentence_transformers import SentenceTransformer  # noqa: E402
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM  # noqa: E402
 
 # Setup logging
 logging.basicConfig(
@@ -51,7 +51,7 @@ def detect_crisis_level(post: str, concern: Optional[str]) -> Tuple[bool, str]:
     crisis_level: 'immediate', 'high', 'medium', 'none'
     """
     post_lower = post.lower()
-    
+
     # IMMEDIATE DANGER - explicit suicidal ideation or self-harm intent
     immediate_keywords = [
         "kill myself", "end my life", "suicide",
@@ -59,7 +59,7 @@ def detect_crisis_level(post: str, concern: Optional[str]) -> Tuple[bool, str]:
         "going to jump", "planning to die", "planning to kill myself",
         "wrote a note", "saying goodbye"
     ]
-    
+
     # HIGH RISK - self-harm, methods, or passive suicidal ideation
     high_risk_keywords = [
         "want to die", "cut myself", "cutting myself", "self-harm", "harm myself",
@@ -68,32 +68,32 @@ def detect_crisis_level(post: str, concern: Optional[str]) -> Tuple[bool, str]:
         "nothing to live for", "can't do this anymore", "give up", "hanging", "pills",
         "can't go on"
     ]
-    
+
     # MEDIUM RISK - distress indicators
     medium_risk_keywords = [
         "hopeless", "worthless", "burden", "pointless", "no point",
         "can't take it", "breaking down", "falling apart"
     ]
-    
+
     # Check immediate danger
     if any(keyword in post_lower for keyword in immediate_keywords):
         return True, "immediate"
-    
+
     # Check concern level override
     if concern and concern.lower() == "high":
         # Verify with keywords
         if any(keyword in post_lower for keyword in high_risk_keywords + immediate_keywords):
             return True, "immediate"
         return True, "high"
-    
+
     # Check high risk
     if any(keyword in post_lower for keyword in high_risk_keywords):
         return True, "high"
-    
+
     # Check medium risk
     if any(keyword in post_lower for keyword in medium_risk_keywords):
         return False, "medium"
-    
+
     return False, "none"
 
 
@@ -133,7 +133,7 @@ def load_jsonl(path: str) -> List[Dict]:
     """Load JSONL file safely."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"Metadata file not found: {path}")
-    
+
     with open(path, "r", encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
 
@@ -152,7 +152,7 @@ def filter_unsafe_snippets(snippets: List[Dict]) -> List[Dict]:
         r'\bpro-?suicide\b',
         r'\bbetter\s+dead\b.*\bhow\b'
     ]
-    
+
     filtered = []
     for snippet in snippets:
         text_lower = snippet.get("text", "").lower()
@@ -160,7 +160,7 @@ def filter_unsafe_snippets(snippets: List[Dict]) -> List[Dict]:
             filtered.append(snippet)
         else:
             logger.warning(f"Filtered unsafe snippet: {snippet.get('doc_id', 'unknown')}")
-    
+
     return filtered
 
 
@@ -183,19 +183,19 @@ def retrieve(
     want_concern = (concern or "").lower()
 
     qv = encoder.encode([post], normalize_embeddings=True).astype("float32")
-    D, I = index.search(qv, topk)
+    distances, indices = index.search(qv, topk)
 
     candidates = []
-    for rank, idx in enumerate(I[0]):
-        similarity = float(D[0][rank])
-        
+    for rank, idx in enumerate(indices[0]):
+        similarity = float(distances[0][rank])
+
         # Filter by similarity threshold (increased to 0.45 for better relevance)
         if similarity < min_similarity:
             continue
-        
+
         m = meta[idx].copy()
         score = similarity
-        
+
         # ENHANCED: Stronger filtering based on intent and concern
         # If intents match, boost score. If not, heavily penalize.
         if want_intents:
@@ -204,7 +204,7 @@ def retrieve(
                 score *= 1.2  # Boost by 20%
             else:
                 score *= 0.5  # Penalize by 50%
-        
+
         # If concern matches, boost score.
         if want_concern:
             snippet_concern = m.get("concern", "").lower()
@@ -223,18 +223,18 @@ def retrieve(
             "similarity": similarity,
             **m
         })
-    
+
     # Sort by adjusted score and take top K
     candidates.sort(key=lambda x: x["score"], reverse=True)
     top_snippets = candidates[:keep]
-    
+
     # Filter unsafe content
     safe_snippets = filter_unsafe_snippets(top_snippets)
-    
+
     # Renumber ranks
     for i, snippet in enumerate(safe_snippets):
         snippet["rank"] = i + 1
-    
+
     return safe_snippets
 
 
@@ -298,17 +298,17 @@ def generate_response(
 ) -> Optional[str]:
     """
     Generate response with improved quality controls and retry logic.
-    
+
     FIXED: Better generation parameters and validation.
     """
-    
+
     # Build bad words list (banned phrases only, not user words)
     banned_phrases = [
         "i understand how you feel", "i've been there", "i can relate",
         "i went through", "stay strong", "you've got this",
         "sending prayers", "god bless", "bless you"
     ]
-    
+
     bad_words_ids = []
     for phrase in banned_phrases:
         try:
@@ -317,7 +317,7 @@ def generate_response(
                 bad_words_ids.append(ids)
         except Exception:
             pass
-    
+
     # IMPROVED: Optimized generation parameters for grounded, relevant responses
     gen_kwargs = {
         "max_new_tokens": 400,               # Increased to prevent truncation
@@ -332,10 +332,10 @@ def generate_response(
         "eos_token_id": tokenizer.eos_token_id,
         "pad_token_id": tokenizer.pad_token_id or tokenizer.eos_token_id,
     }
-    
+
     if bad_words_ids:
         gen_kwargs["bad_words_ids"] = bad_words_ids
-    
+
     if do_sample:
         gen_kwargs.update({
             "do_sample": True,
@@ -343,31 +343,31 @@ def generate_response(
             "top_p": top_p,
             "num_beams": 1
         })
-    
+
     input_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).input_ids.to(device)
-    
+
     # CRITICAL FIX: Force decoder to start with a proper sentence
     # This prevents it from regurgitating the prompt
     # decoder_start = "The situation"
     # decoder_input_ids = tokenizer(decoder_start, add_special_tokens=False, return_tensors="pt").input_ids.to(device)
     # gen_kwargs["decoder_input_ids"] = decoder_input_ids
-    
+
     best = None
-    
+
     # Attempt generation with retries
     for attempt in range(max_attempts):
         try:
             gen_ids = model.generate(input_ids, **gen_kwargs)
             reply = tokenizer.decode(gen_ids[0], skip_special_tokens=True).strip()
             best = reply # Capture best attempt
-            
+
             # # Remove decoder start if present
             # if reply.startswith(decoder_start):
             #     reply = reply[len(decoder_start):].strip()
-            
+
             # Validate response with enhanced grounding checks
             # Note: Citations are no longer required or added
-            
+
             if is_valid_response(reply, post, snippets):
                 # ENHANCED: Stronger semantic grounding validation
                 snippet_words = set()
@@ -380,7 +380,7 @@ def generate_response(
 
                 reply_words = set(re.findall(r'\b\w{4,}\b', reply.lower()))
                 overlap = len(snippet_words & reply_words)
-                
+
                 # Calculate overlap ratio for better grounding metric
                 overlap_ratio = overlap / len(reply_words) if reply_words else 0
 
@@ -390,28 +390,28 @@ def generate_response(
                     logger.info(f"Grounded response validated (overlap: {overlap}, ratio: {overlap_ratio:.2f})")
                     return reply
                 else:
-                    # CHANGED: Log warning but ALLOW the response. 
+                    # CHANGED: Log warning but ALLOW the response.
                     # Better to give a slightly ungrounded supportive reply than a generic fallback.
                     logger.warning(f"Low grounding detected (overlap: {overlap}, ratio: {overlap_ratio:.2f}) - Accepting anyway")
                     return reply
 
             logger.warning(f"Attempt {attempt + 1}: Ungrounded or invalid: {reply[:150]}...")
 
-            
+
             # For retries, try without forced decoder start
             if attempt == 0 and "decoder_input_ids" in gen_kwargs:
                 del gen_kwargs["decoder_input_ids"]
                 logger.info("Retry without forced decoder start")
-            
+
             # Add slight randomness for subsequent retries
             if attempt > 0:
                 gen_kwargs["temperature"] = 0.8 + (attempt * 0.15)
                 gen_kwargs["do_sample"] = True
                 gen_kwargs["num_beams"] = 1
-                
+
         except Exception as e:
             logger.error(f"Generation attempt {attempt + 1} failed: {e}")
-    
+
     # If we failed to get a valid response, return the best attempt but CLEAN IT
     if best:
         # Check if it looks truncated
@@ -423,7 +423,7 @@ def generate_response(
                 cleaned = match.group(1)
                 logger.warning(f"DEBUG: Regex cleanup: '{best[-20:]}' -> '{cleaned[-20:]}'")
                 return cleaned
-            
+
             # Fallback: simple split if regex failed but period exists
             if '.' in best:
                 # Split by dot, remove the last chunk (likely fragment)
@@ -431,7 +431,7 @@ def generate_response(
                 cleaned = parts[0] + '.'
                 logger.warning(f"DEBUG: Split cleanup: '{best[-20:]}' -> '{cleaned[-20:]}'")
                 return cleaned
-            
+
             # Specific check for trailing list markers
             if re.search(r'(?:First|Second|Third|1\.|2\.|3\.)\s*,?$', best.strip()):
                  cleaned = best.rsplit(' ', 1)[0] + "."
@@ -440,7 +440,7 @@ def generate_response(
 
             logger.warning(f"DEBUG: Cleanup failed (no valid punctuation), returning fallback instead of: '{best[-20:]}'")
             return "I'm sorry, I'm having trouble finding the right words right now. Please know that you are not alone, and I encourage you to reach out to a trusted person or professional for support."
-    
+
     # If best is None (generation crashed?), return generic fallback
     logger.error("Generation completely failed (best is None). Returning generic fallback.")
     return "I'm sorry, I'm having trouble finding the right words right now. Please know that you are not alone, and I encourage you to reach out to a trusted person or professional for support."
@@ -470,13 +470,13 @@ def is_valid_response(reply: str, post: str, snippets: List[Dict]) -> bool:
     ]
     rl = reply.lower()
     if any(m in rl for m in reject_markers):
-        logger.warning(f"Instruction leakage detected")
+        logger.warning("Instruction leakage detected")
         return False
-        
+
     # Reject persona hallucinations and opinionated first-person language
     # Removed "i'm sorry" to allow empathy
     persona_markers = [
-        "i can relate", "i have been there", "i know how it feels", 
+        "i can relate", "i have been there", "i know how it feels",
         "i went through", "i have a job", "i am unemployed",
         "i have dealt with", "i struggle with", "my cat", "my husband",
         "my wife", "my boyfriend", "my girlfriend", "my children",
@@ -486,7 +486,7 @@ def is_valid_response(reply: str, post: str, snippets: List[Dict]) -> bool:
         "i want", "what can i say"
     ]
     if any(m in rl for m in persona_markers):
-        logger.warning(f"Persona/First-person hallucination detected")
+        logger.warning("Persona/First-person hallucination detected")
         return False
 
     # Reject toxic agreement or reinforcement of negative self-talk
@@ -500,15 +500,10 @@ def is_valid_response(reply: str, post: str, snippets: List[Dict]) -> bool:
         "therapist", "counselor", "my goal as a", # Added persona markers
         "justified", "hero", "you will not be a hero" # Added safety markers
     ]
-    if any(m in rl for m in toxic_markers):
-        logger.warning(f"Toxic/Hallucinated marker detected: {m}")
+    matched = [m for m in toxic_markers if m in rl]
+    if matched:
+        logger.warning(f"Toxic/Hallucinated marker detected: {matched[0]}")
         return False
-        # Check if large chunks (60+ chars) are copied verbatim (increased from 40)
-        for i in range(len(snip_text) - 60):
-            chunk = snip_text[i:i+60]
-            if chunk in reply.lower():
-                logger.warning(f"Verbatim copying detected: '{chunk}...'")
-                return False
 
     # Should not be copy-paste formatting
     if "**" in reply or reply.count("-") > 6 or reply.count("•") > 4:
@@ -519,7 +514,7 @@ def is_valid_response(reply: str, post: str, snippets: List[Dict]) -> bool:
     # OR 1 long sentence (> 60 chars)
     sents = re.split(r'[.!?]+', reply)
     valid_sents = [s for s in sents if len(s.strip()) > 10]
-    
+
     if len(valid_sents) < 2 and len(reply) < 60:
         logger.warning(f"Too few sentences/too short: {len(valid_sents)} sents, {len(reply)} chars")
         return False
@@ -545,7 +540,7 @@ def log_interaction(
     High-risk interactions should be flagged for human review.
     """
     os.makedirs(log_dir, exist_ok=True)
-    
+
     timestamp = datetime.now().isoformat()
     log_entry = {
         "timestamp": timestamp,
@@ -558,16 +553,16 @@ def log_interaction(
         "reply_hash": hash(reply),
         "requires_review": crisis_level in ["immediate", "high"]
     }
-    
+
     # Separate high-risk logs
     if crisis_level in ["immediate", "high"]:
         log_file = os.path.join(log_dir, f"high_risk_{datetime.now().strftime('%Y%m%d')}.jsonl")
     else:
         log_file = os.path.join(log_dir, f"general_{datetime.now().strftime('%Y%m%d')}.jsonl")
-    
+
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-    
+
     if crisis_level in ["immediate", "high"]:
         logger.warning(f"HIGH-RISK interaction logged: {crisis_level}")
 
@@ -588,33 +583,33 @@ def main():
     ap.add_argument("--keep", type=int, default=5, help="How many snippets to keep for the prompt.")
     ap.add_argument("--topk", type=int, default=50, help="How many neighbors to fetch before filtering.")
     ap.add_argument("--min_similarity", type=float, default=0.3, help="Minimum similarity threshold.")
-    
+
     # Model args
     ap.add_argument("--enc_model", default="sentence-transformers/all-MiniLM-L6-v2")
     ap.add_argument("--gen_model", default="google/flan-t5-base",
                     help="Generator model. Consider flan-t5-large for better quality.")
 
-    
+
     # Generation controls
     ap.add_argument("--max_new_tokens", type=int, default=250)
     ap.add_argument("--do-sample", action="store_true")
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--top_p", type=float, default=0.9)
-    
+
     # Device
     ap.add_argument("--device", choices=["cpu", "mps", "cuda"], default="cpu")
-    
+
     # Logging
     ap.add_argument("--log-dir", default="logs/interactions", help="Directory for interaction logs.")
     ap.add_argument("--no-log", action="store_true", help="Disable interaction logging.")
-    
+
     args = ap.parse_args()
-    
+
     # ========================================================================
     # SAFETY: Crisis Detection First
     # ========================================================================
     is_crisis, crisis_level = detect_crisis_level(args.post, args.concern)
-    
+
     if is_crisis and crisis_level == "immediate":
         # For immediate danger, return crisis resources directly
         crisis_msg = get_crisis_response(crisis_level)
@@ -626,13 +621,13 @@ def main():
             "disclaimer": "⚠️ This is an automated response. Please seek immediate professional help."
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        
+
         # Log high-risk interaction
         if not args.no_log:
             log_interaction(args.post, args.concern, crisis_level, crisis_msg, [], args.log_dir)
-        
+
         return
-    
+
     # ========================================================================
     # Load Resources
     # ========================================================================
@@ -641,28 +636,28 @@ def main():
         kb = cfg["kb"]
         meta_path = kb["metadata_jsonl"]
         index_path = kb["faiss_index"]
-        
+
         meta = load_jsonl(meta_path)
         index = faiss.read_index(index_path)
-        
+
         # Improve HNSW recall if applicable
         try:
             index.hnsw.efSearch = max(64, args.topk)
         except Exception:
             pass
-        
+
         logger.info(f"Loaded {len(meta)} KB entries from {meta_path}")
-        
+
     except Exception as e:
         logger.error(f"Failed to load resources: {e}")
         print(json.dumps({"error": str(e)}, indent=2))
         return
-    
+
     # ========================================================================
     # Retrieval
     # ========================================================================
     encoder = SentenceTransformer(args.enc_model)
-    
+
     snippets = retrieve(
         meta=meta,
         index=index,
@@ -674,7 +669,7 @@ def main():
         keep=args.keep,
         min_similarity=args.min_similarity
     )
-    
+
     if not snippets:
         logger.warning("No suitable snippets retrieved. Using fallback response.")
         fallback = (
@@ -691,17 +686,17 @@ def main():
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    
+
     logger.info(f"Retrieved {len(snippets)} snippets")
-    
+
     # ========================================================================
     # Generation
     # ========================================================================
     prompt = build_prompt(args.post, args.intents, args.concern, snippets)
-    
+
     tokenizer = AutoTokenizer.from_pretrained(args.gen_model)
     model = AutoModelForSeq2SeqLM.from_pretrained(args.gen_model, torch_dtype=torch.float32)
-    
+
     device = args.device
     if device == "mps" and not torch.backends.mps.is_available():
         logger.warning("MPS not available, falling back to CPU")
@@ -717,7 +712,7 @@ def main():
 
     model.to(device)
     logger.info(f"Using device: {device}")
-    
+
     reply = generate_response(
         prompt=prompt,
         tokenizer=tokenizer,
@@ -730,7 +725,7 @@ def main():
         top_p=args.top_p,
         max_new_tokens=args.max_new_tokens
     )
-    
+
     if not reply:
         logger.error("Failed to generate valid response after multiple attempts")
         # Construct a basic safe response based on concern level
@@ -748,14 +743,14 @@ def main():
                 "I encourage you to reach out to a mental health professional or trusted person "
                 "who can offer personalized support. Your wellbeing matters."
             )
-    
+
     # ========================================================================
     # Add Crisis Footer if Needed
     # ========================================================================
     if is_crisis:
         crisis_footer = get_crisis_response(crisis_level)
         reply += crisis_footer
-    
+
     # ========================================================================
     # Output & Logging
     # ========================================================================
@@ -771,7 +766,7 @@ def main():
                 "intent": s.get("intent", ""),
                 "concern": s.get("concern", ""),
                 "similarity": s.get("similarity", 0.0),
-                "text": s.get("text", "") 
+                "text": s.get("text", "")
             }
             for s in snippets
         ],
@@ -781,13 +776,13 @@ def main():
             "For personalized help, please consult a licensed mental health professional."
         )
     }
-    
+
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    
+
     # Log interaction
     if not args.no_log:
         log_interaction(args.post, args.concern, crisis_level, reply, snippets, args.log_dir)
-    
+
     # Cleanup
     try:
         del encoder, tokenizer, model

@@ -10,7 +10,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import joblib
 import numpy as np
@@ -22,9 +22,7 @@ from sentence_transformers import SentenceTransformer
 from .base import BaseClassifier
 from .intent import _encode_texts
 from ..data import (
-    CONCERN_LABELS,
     ensure_dir,
-    normalize_concern,
     read_concern_split,
     set_seed,
 )
