@@ -141,9 +141,19 @@ concern_checkpoint: results/runs/<your_concern_run>/checkpoint
 
 ### 2. Build Knowledge Base (one-time)
 
+Use the same encoder as the pipeline (recommended so retrieval matches your classifier setup):
+
 ```bash
-python scripts/build_kb.py --config configs/data.yaml
+python scripts/build_kb.py --config configs/data.yaml --pipeline-config configs/pipeline.yaml
 ```
+
+Or with an explicit encoder:
+
+```bash
+python scripts/build_kb.py --config configs/data.yaml --encoder sentence-transformers/all-distilroberta-v1
+```
+
+**Note:** If you change `retriever.encoder_model` in `configs/pipeline.yaml`, rebuild the KB with the new encoder (e.g. `--pipeline-config configs/pipeline.yaml`) so the FAISS index and runtime retriever stay in sync.
 
 ### 3. Generate Responses
 
@@ -182,6 +192,13 @@ python scripts/evaluate_classifiers.py \
   --data-config configs/data.yaml \
   --split test \
   --output results/classifier_metrics.json
+
+# Calibrate: sweep threshold on val split and write best to pipeline config
+python scripts/evaluate_classifiers.py \
+  --pipeline-config configs/pipeline.yaml \
+  --data-config configs/data.yaml \
+  --split val \
+  --calibrate
 ```
 
 Reports intent (macro F1, micro F1, per-tag precision/recall/F1, PR-AUC) and concern (accuracy, macro F1, per-label F1, confusion matrix).
@@ -193,9 +210,12 @@ python scripts/evaluate.py --pred data/splits/test_pred.jsonl
 
 # Optionally write per-row scores for analysis
 python scripts/evaluate.py --pred data/splits/test_pred.jsonl --output results/eval_scores.jsonl
+
+# Stratified report: metrics by intent tag and concern level
+python scripts/evaluate.py --pred data/splits/test_pred.jsonl --stratified
 ```
 
-Evaluation is reference-free: it scores relevance, grounding, safety, and crisis coverage without needing gold replies. See [Evaluation Metrics](#evaluation-metrics) for details.
+Evaluation is reference-free: it scores relevance, grounding, safety, and crisis coverage without needing gold replies. Use `--stratified` to see which intents or concern levels get worse replies. See [Evaluation Metrics](#evaluation-metrics) for details.
 
 ### 6. Run Tests
 
@@ -252,6 +272,8 @@ This is the single config that defines the full end-to-end system. Key settings:
 | `retriever.topk` | FAISS candidates before re-ranking (default: 50) |
 | `retriever.keep` | Snippets passed to generator after re-ranking (default: 5-6) |
 | `retriever.min_similarity` | Minimum cosine similarity threshold (default: 0.45) |
+| `retriever.cross_encoder_model` | (Optional) Cross-encoder for re-ranking top-N candidates (e.g. `cross-encoder/ms-marco-MiniLM-L-6-v2`) |
+| `retriever.cross_encoder_top_n` | How many FAISS candidates the cross-encoder scores (default: 20) |
 | `generator.model_name` | Flan-T5 variant (e.g. `google/flan-t5-base`) |
 | `generator.device` | `cpu`, `mps`, or `cuda` |
 | `enable_logging` | Enable/disable interaction logging (default: true) |
@@ -322,6 +344,7 @@ Grade scale: A (>=0.78), B (>=0.62), C (>=0.48), D (>=0.32), F (<0.32)
 | `ValueError: post cannot be empty` | Pipeline received an empty or whitespace string | Pass a non-empty post string |
 | Low classifier accuracy | Default threshold may not be optimal | Use `evaluate_classifiers.py --sweep-threshold` to find the best threshold, then set `intent_threshold` in `pipeline.yaml` |
 | LoRA training uses different data | LoRA models in `models/` load from `llm_tagged_dir` | This is by design; baseline uses `create_splits` output, LoRA uses LLM-tagged data |
+| Retrieval seems off after changing encoder | KB was built with a different encoder than `pipeline.yaml` | Rebuild KB: `python scripts/build_kb.py --config configs/data.yaml --pipeline-config configs/pipeline.yaml` |
 
 ---
 

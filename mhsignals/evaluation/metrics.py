@@ -211,6 +211,8 @@ class ReplyQualityEvaluator:
 
                 scores = self.score_reply(post, reply, snippets)
                 scores["post"] = post[:100]
+                scores["intents"] = item.get("predicted_intents", [])
+                scores["concern"] = item.get("predicted_concern", "")
                 results.append(scores)
 
         if n_skipped > 0:
@@ -251,3 +253,58 @@ class ReplyQualityEvaluator:
             )
             print(f"Post: {r['post']}")
             print("-" * 50)
+
+    @staticmethod
+    def print_stratified_report(results: List[Dict]) -> None:
+        """Print quality metrics broken down by intent tag and concern level."""
+        if not results:
+            print("No results to stratify.")
+            return
+
+        def _group_stats(group: List[Dict]) -> Dict:
+            if not group:
+                return {}
+            return {
+                "n": len(group),
+                "final": round(float(np.mean([r["final"] for r in group])), 3),
+                "relevance": round(float(np.mean([r["relevance"] for r in group])), 3),
+                "grounding": round(float(np.mean([r["grounding"] for r in group])), 3),
+                "safety": round(float(np.mean([r["safety"] for r in group])), 3),
+                "crisis": round(float(np.mean([r["crisis"] for r in group])), 3),
+            }
+
+        # --- By intent ---
+        intent_groups: Dict[str, List[Dict]] = {}
+        for r in results:
+            for intent in (r.get("intents") or []):
+                intent_groups.setdefault(intent, []).append(r)
+
+        print("\n======== STRATIFIED: BY INTENT ========")
+        print(f"{'Intent':<25s}  {'N':>5s}  {'Final':>6s}  {'Rel':>6s}  {'Gnd':>6s}  {'Safe':>6s}  {'Cris':>6s}")
+        print("-" * 75)
+        for intent in sorted(intent_groups):
+            s = _group_stats(intent_groups[intent])
+            print(
+                f"{intent:<25s}  {s['n']:>5d}  {s['final']:>6.3f}  "
+                f"{s['relevance']:>6.3f}  {s['grounding']:>6.3f}  "
+                f"{s['safety']:>6.3f}  {s['crisis']:>6.3f}"
+            )
+
+        # --- By concern ---
+        concern_groups: Dict[str, List[Dict]] = {}
+        for r in results:
+            clevel = (r.get("concern") or "unknown").lower()
+            concern_groups.setdefault(clevel, []).append(r)
+
+        print("\n======== STRATIFIED: BY CONCERN ========")
+        print(f"{'Concern':<12s}  {'N':>5s}  {'Final':>6s}  {'Rel':>6s}  {'Gnd':>6s}  {'Safe':>6s}  {'Cris':>6s}")
+        print("-" * 60)
+        for concern in ["low", "medium", "high", "unknown"]:
+            if concern not in concern_groups:
+                continue
+            s = _group_stats(concern_groups[concern])
+            print(
+                f"{concern:<12s}  {s['n']:>5d}  {s['final']:>6.3f}  "
+                f"{s['relevance']:>6.3f}  {s['grounding']:>6.3f}  "
+                f"{s['safety']:>6.3f}  {s['crisis']:>6.3f}"
+            )

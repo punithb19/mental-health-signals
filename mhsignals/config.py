@@ -39,7 +39,9 @@ class RetrieverConfig:
     encoder_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     topk: int = 50
     keep: int = 5
-    min_similarity: float = 0.45  # Stricter threshold for more relevant snippets
+    min_similarity: float = 0.45
+    cross_encoder_model: str = ""
+    cross_encoder_top_n: int = 20
 
 
 @dataclass
@@ -149,6 +151,8 @@ def load_pipeline_config(path: str) -> PipelineConfig:
         topk=int(ret_raw.get("topk", 50)),
         keep=int(ret_raw.get("keep", 5)),
         min_similarity=float(ret_raw.get("min_similarity", 0.45)),
+        cross_encoder_model=ret_raw.get("cross_encoder_model", ""),
+        cross_encoder_top_n=int(ret_raw.get("cross_encoder_top_n", 20)),
     )
 
     gen_raw = raw.get("generator", {})

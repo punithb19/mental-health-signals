@@ -158,6 +158,7 @@ class CrisisDetector:
 
         has_critical_risk = "Critical Risk" in intents
         has_distress = "Mental Distress" in intents
+        has_maladaptive = "Maladaptive Coping" in intents
         concern_high = concern is not None and concern.lower() == "high"
         concern_medium = concern is not None and concern.lower() == "medium"
 
@@ -167,7 +168,11 @@ class CrisisDetector:
             return "high"
         if concern_high and has_distress:
             return "high"
+        if concern_high and has_maladaptive:
+            return "high"
         if concern_medium and has_distress:
+            return "medium"
+        if concern_medium and has_maladaptive:
             return "medium"
 
         return "none"
@@ -203,6 +208,11 @@ class CrisisDetector:
                 "- Talking to a trusted friend or family member\n"
                 "- If thoughts worsen, seek immediate help\n"
                 "Resources: https://findahelpline.com"
+            )
+        elif level == "medium":
+            return (
+                "\n\nIf you find things getting harder, speaking with a counselor "
+                "or trusted person can help. Resources: https://findahelpline.com"
             )
         return ""
 

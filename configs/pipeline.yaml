@@ -28,11 +28,14 @@ kb:
   processed_dir: data/processed/kb
 
 # --- Retriever ---
+# Use DistilRoBERTa to align with classifier embeddings (same family as intent/concern models)
 retriever:
-  encoder_model: sentence-transformers/all-MiniLM-L6-v2
+  encoder_model: sentence-transformers/all-distilroberta-v1
   topk: 50           # FAISS candidates before re-ranking
   keep: 6            # Snippets passed to generator (more context for better grounding)
   min_similarity: 0.45   # Stricter threshold for more relevant snippets (RAG-enhanced)
+  cross_encoder_model: cross-encoder/ms-marco-MiniLM-L-6-v2   # Re-ranks top N for better relevance
+  cross_encoder_top_n: 20  # How many FAISS candidates the cross-encoder scores
 
 # --- Generator ---
 generator:

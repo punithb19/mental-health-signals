@@ -13,6 +13,10 @@ import json
 import sys
 from pathlib import Path
 
+_root = Path(__file__).resolve().parents[1]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
 from mhsignals.evaluation.metrics import ReplyQualityEvaluator
 
 
@@ -30,6 +34,10 @@ def main():
         "--output", default=None,
         help="Optional: write per-row scores to a JSONL file.",
     )
+    ap.add_argument(
+        "--stratified", action="store_true",
+        help="Also print metrics stratified by intent and concern level.",
+    )
     args = ap.parse_args()
 
     # Validate input path before loading the encoder
@@ -40,6 +48,9 @@ def main():
     evaluator = ReplyQualityEvaluator(encoder_name=args.enc)
     results = evaluator.evaluate_file(args.pred)
     evaluator.print_report(results)
+
+    if args.stratified:
+        evaluator.print_stratified_report(results)
 
     if args.output:
         out_path = Path(args.output)

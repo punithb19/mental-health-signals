@@ -25,6 +25,7 @@ class KBRetriever:
 
     Uses FAISS for fast approximate nearest-neighbor search, then re-ranks
     results based on intent and concern matches from the classifier.
+    Optionally applies a cross-encoder for higher-quality re-ranking.
     """
 
     def __init__(
@@ -32,8 +33,8 @@ class KBRetriever:
         metadata_path: str,
         faiss_index_path: str,
         encoder_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        cross_encoder_name: str = "",
     ):
-        # Validate paths before loading
         if not Path(metadata_path).exists():
             raise FileNotFoundError(
                 f"KB metadata file not found: {metadata_path}. "
@@ -49,7 +50,12 @@ class KBRetriever:
         self._index = faiss.read_index(faiss_index_path)
         self._encoder = SentenceTransformer(encoder_name)
 
-        # Validate metadata/index consistency
+        self._cross_encoder = None
+        if cross_encoder_name:
+            from sentence_transformers import CrossEncoder
+            self._cross_encoder = CrossEncoder(cross_encoder_name)
+            logger.info("Cross-encoder loaded: %s", cross_encoder_name)
+
         if len(self._meta) != self._index.ntotal:
             logger.warning(
                 "Metadata count (%d) does not match FAISS index count (%d). "
@@ -57,7 +63,6 @@ class KBRetriever:
                 len(self._meta), self._index.ntotal,
             )
 
-        # Improve HNSW recall
         try:
             self._index.hnsw.efSearch = 64
         except Exception:
@@ -83,6 +88,7 @@ class KBRetriever:
         topk: int = 50,
         keep: int = 5,
         min_similarity: float = 0.45,
+        cross_encoder_top_n: int = 20,
     ) -> List[Dict]:
         """
         Retrieve and re-rank KB snippets for a given post.
@@ -157,6 +163,17 @@ class KBRetriever:
             })
 
         candidates.sort(key=lambda x: x["score"], reverse=True)
+
+        # Cross-encoder re-ranking on top N candidates (if available)
+        if self._cross_encoder and len(candidates) > 1:
+            ce_candidates = candidates[:cross_encoder_top_n]
+            pairs = [(post, c["text"]) for c in ce_candidates]
+            ce_scores = self._cross_encoder.predict(pairs)
+            for i, c in enumerate(ce_candidates):
+                c["ce_score"] = float(ce_scores[i])
+            ce_candidates.sort(key=lambda x: x["ce_score"], reverse=True)
+            candidates = ce_candidates + candidates[cross_encoder_top_n:]
+
         top_snippets = candidates[:keep]
 
         safe_snippets = filter_unsafe_snippets(top_snippets)

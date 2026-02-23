@@ -135,6 +135,7 @@ class MHSignalsPipeline:
             metadata_path=cfg.kb.metadata_jsonl,
             faiss_index_path=cfg.kb.faiss_index,
             encoder_name=cfg.retriever.encoder_model,
+            cross_encoder_name=cfg.retriever.cross_encoder_model,
         )
 
         # Load generator
@@ -234,6 +235,7 @@ class MHSignalsPipeline:
             topk=ret_cfg.topk if ret_cfg else 50,
             keep=ret_cfg.keep if ret_cfg else 5,
             min_similarity=ret_cfg.min_similarity if ret_cfg else 0.45,
+            cross_encoder_top_n=ret_cfg.cross_encoder_top_n if ret_cfg else 20,
         )
 
         # ---- Step 5: Response generation ----
@@ -245,7 +247,7 @@ class MHSignalsPipeline:
         )
 
         # ---- Step 6: Crisis footer if needed ----
-        if crisis.is_crisis:
+        if crisis.level in ("immediate", "high", "medium"):
             footer = CrisisDetector.get_crisis_response(crisis.level)
             reply += footer
 

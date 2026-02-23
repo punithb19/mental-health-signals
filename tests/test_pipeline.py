@@ -82,7 +82,7 @@ class TestPipelineProcess:
         pipeline.generator.generate.assert_not_called()
 
     def test_non_crisis_calls_generator(self, sample_post):
-        pipeline = self._make_pipeline()
+        pipeline = self._make_pipeline(intents=["Mood Tracking"], concern="low")
         response = pipeline(sample_post)
 
         pipeline.generator.generate.assert_called_once()

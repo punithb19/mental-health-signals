@@ -10,10 +10,8 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import faiss
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
 
 from ..config import KBConfig
 
@@ -202,6 +200,14 @@ class KBBuilder:
         if not texts:
             raise RuntimeError(f"No texts found in {cfg.corpus_jsonl}")
 
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            raise ImportError(
+                "Building the KB requires sentence-transformers. "
+                "Install with: pip install sentence-transformers"
+            ) from None
+
         print(f"[kb_encode] Loading encoder: {encoder_name}")
         model = SentenceTransformer(encoder_name)
 
@@ -216,10 +222,26 @@ class KBBuilder:
         Path(os.path.dirname(cfg.embeddings_npy)).mkdir(parents=True, exist_ok=True)
         np.save(cfg.embeddings_npy, X)
 
-        d = X.shape[1]
-        index = faiss.IndexHNSWFlat(d, 32)
-        index.hnsw.efConstruction = 200
-        index.add(X)
+        try:
+            import faiss
+        except ImportError:
+            raise ImportError(
+                "Building the FAISS index requires faiss-cpu. "
+                "Install with: pip install faiss-cpu"
+            ) from None
+
+        n_vectors, d = X.shape[0], X.shape[1]
+        # Use exact flat index for smaller KBs: more stable on macOS/ARM (avoids HNSW segfaults)
+        if n_vectors <= 100_000:
+            index = faiss.IndexFlatIP(d)
+            index.add(X)
+            print(f"[kb_encode] FAISS index: IndexFlatIP (exact search, {n_vectors} vectors)")
+        else:
+            index = faiss.IndexHNSWFlat(d, 32)
+            index.hnsw.efConstruction = 200
+            index.add(X)
+            print(f"[kb_encode] FAISS index: IndexHNSWFlat (approx, {n_vectors} vectors)")
+
         faiss.write_index(index, cfg.faiss_index)
 
         print(f"[kb_encode] Embeddings -> {cfg.embeddings_npy} shape={X.shape}")

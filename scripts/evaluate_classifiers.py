@@ -31,6 +31,10 @@ import json
 import sys
 from pathlib import Path
 
+_root = Path(__file__).resolve().parents[1]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
@@ -188,6 +192,10 @@ def main():
         help="Sweep intent threshold on the chosen split and report best.",
     )
     ap.add_argument(
+        "--calibrate", action="store_true",
+        help="Run threshold sweep on val split and write the best to --pipeline-config.",
+    )
+    ap.add_argument(
         "--output", default=None,
         help="Optional path to write JSON results.",
     )
@@ -283,6 +291,47 @@ def main():
         print(f"    Labels: {concern_metrics['label_order']}")
         for row in concern_metrics["confusion_matrix"]:
             print(f"    {row}")
+
+    # --- Calibrate: sweep on val and write best threshold to pipeline config ---
+    if args.calibrate:
+        if not args.pipeline_config:
+            print("[ERROR] --calibrate requires --pipeline-config.", file=sys.stderr)
+            sys.exit(1)
+        if not intent_ckpt:
+            print("[ERROR] --calibrate requires an intent checkpoint.", file=sys.stderr)
+            sys.exit(1)
+
+        val_file = splits_dir / "val.csv"
+        if not val_file.exists():
+            print(f"[ERROR] Val split not found: {val_file}", file=sys.stderr)
+            sys.exit(1)
+
+        print("\n--- Calibration: sweeping threshold on val split ---")
+        val_df = read_intent_split(val_file)
+        if "intent_clf" not in dir():
+            intent_clf = _load_classifier(str(Path(intent_ckpt)))
+        sweep = sweep_intent_threshold(intent_clf, val_df, CANON_KEYS)
+
+        if sweep:
+            best_thr = sweep["best_threshold"]
+            best_f1 = sweep["best_macro_f1"]
+            all_results["calibration"] = sweep
+
+            print(f"  Best threshold: {best_thr}  (macro F1={best_f1})")
+            for row in sweep["sweep"]:
+                marker = " <-- best" if row["threshold"] == best_thr else ""
+                print(f"    thr={row['threshold']:.2f}  macro_f1={row['macro_f1']:.4f}{marker}")
+
+            # Write best threshold to pipeline config
+            import yaml
+            cfg_path = Path(args.pipeline_config)
+            with open(cfg_path, "r") as f:
+                raw = yaml.safe_load(f)
+            old_thr = raw.get("intent_threshold", None)
+            raw["intent_threshold"] = best_thr
+            with open(cfg_path, "w") as f:
+                yaml.dump(raw, f, default_flow_style=False, sort_keys=False)
+            print(f"\n  Updated {cfg_path}: intent_threshold {old_thr} -> {best_thr}")
 
     # --- Save results ---
     if args.output:

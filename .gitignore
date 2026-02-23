@@ -30,6 +30,10 @@ hf_cache/
 *.h5
 *.ckpt
 
+# KB binary artifacts (rebuild with: python scripts/build_kb.py --pipeline-config configs/pipeline.yaml)
+data/processed/kb/*.faiss
+data/processed/kb/*.npy
+
 models/__pycache__/
 __pycache__/
 *.pyc
