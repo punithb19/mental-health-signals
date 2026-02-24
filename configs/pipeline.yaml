@@ -16,6 +16,7 @@ seed: 42
 # These should point to directories containing meta.json + model artifacts
 # produced by: python scripts/train.py --task intent/concern ...
 intent_checkpoint: results/runs/distilroberta_base_lora_20260222_011210/checkpoint
+# Lower = more intent tags (higher recall, more false positives); higher = fewer tags. Tune via evaluate_classifiers.py --calibrate.
 intent_threshold: 0.35
 concern_checkpoint: results/runs/distilroberta_base_lora_concern_20260222_095012/checkpoint
 

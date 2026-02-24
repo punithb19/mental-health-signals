@@ -36,6 +36,19 @@ DISCLAIMER = (
 )
 
 
+def _concern_from_intents(intents: List[str], concern: str) -> str:
+    """
+    Align concern with high-severity intents so we never get e.g. Critical Risk + low concern.
+    """
+    c = (concern or "").strip().lower()
+    intent_set = {s.strip().lower() for s in (intents or [])}
+    if "critical risk" in intent_set and c != "high":
+        return "high"
+    if c == "low" and intent_set & {"maladaptive coping", "mental distress", "seeking help"}:
+        return "medium"
+    return c if c in ("low", "medium", "high") else "low"
+
+
 @dataclass
 class Response:
     """Structured output from the pipeline."""
@@ -205,6 +218,9 @@ class MHSignalsPipeline:
 
         # ---- Step 3: Concern classification ----
         concern = self.concern_clf.predict(post)
+        concern = (concern or "").strip().lower() or "low"
+        # Intent–concern consistency: avoid nonsensical pairs (e.g. Critical Risk + low concern)
+        concern = _concern_from_intents(intents, concern)
         logger.info("Predicted concern: %s", concern)
 
         # ---- Step 4: ML-driven crisis detection ----

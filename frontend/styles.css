@@ -1,0 +1,258 @@
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  background: #f4f4f5;
+  color: #1e1e2f;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+/* ── Container card ──────────────────────────────────────────────────────── */
+.container {
+  width: 100%;
+  max-width: 680px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 2.5rem 2.5rem 3rem;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1e1e2f;
+}
+
+.disclaimer {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: #6b6b80;
+}
+
+.icon-warn {
+  color: #e5a100;
+  margin-right: 0.25rem;
+}
+
+/* ── Input section ───────────────────────────────────────────────────────── */
+.input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #44445a;
+}
+
+textarea {
+  width: 100%;
+  border: 2px solid #e0c8a8;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+  background: #fffcf8;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #d4956b;
+}
+
+textarea::placeholder {
+  color: #c4a882;
+}
+
+#analyze-btn {
+  align-self: center;
+  margin-top: 0.5rem;
+  padding: 0.65rem 2.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #e0546e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+#analyze-btn:hover { background: #c9445c; }
+#analyze-btn:active { transform: scale(0.97); }
+#analyze-btn:disabled {
+  background: #c4c4d0;
+  cursor: not-allowed;
+}
+
+/* ── Error box ───────────────────────────────────────────────────────────── */
+.error-box {
+  background: #fff0f0;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ── Results ─────────────────────────────────────────────────────────────── */
+.results {
+  animation: fadeIn 0.35s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.result-group {
+  margin-bottom: 1.6rem;
+}
+
+.result-group h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #1e1e2f;
+}
+
+/* ── Intent pills ────────────────────────────────────────────────────────── */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.35rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill-0 { background: #dbeafe; color: #1e40af; }
+.pill-1 { background: #fce7f3; color: #be185d; }
+.pill-2 { background: #d1fae5; color: #065f46; }
+.pill-3 { background: #fef3c7; color: #92400e; }
+.pill-4 { background: #ede9fe; color: #5b21b6; }
+.pill-5 { background: #ffedd5; color: #9a3412; }
+.pill-6 { background: #e0e7ff; color: #3730a3; }
+.pill-7 { background: #fecdd3; color: #9f1239; }
+.pill-8 { background: #f0fdf4; color: #166534; }
+
+/* ── Concern bar ─────────────────────────────────────────────────────────── */
+.concern-bar-wrapper {
+  max-width: 400px;
+}
+
+.concern-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(to right, #4ade80, #facc15, #ef4444);
+}
+
+.concern-indicator {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #444;
+  transform: translate(-50%, -50%);
+  transition: left 0.5s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.concern-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #6b6b80;
+  margin-top: 0.3rem;
+}
+
+/* ── Why? ────────────────────────────────────────────────────────────────── */
+.why-text {
+  font-size: 0.92rem;
+  color: #333;
+  line-height: 1.6;
+}
+
+.why-text mark {
+  background: #fef08a;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ── Suggestion box ──────────────────────────────────────────────────────── */
+.suggestion-box {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  background: #e6f7f4;
+  border-left: 4px solid #14b8a6;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+}
+
+.suggestion-box.crisis {
+  background: #fff7ed;
+  border-left-color: #f59e0b;
+}
+
+.suggestion-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.suggestion-box.crisis .suggestion-icon { color: #d97706; }
+
+#suggestion-text {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+/* ── Loading spinner inside button ───────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 520px) {
+  .container { padding: 1.5rem 1.2rem 2rem; }
+  .header h1 { font-size: 1.3rem; }
+}

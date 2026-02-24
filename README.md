@@ -45,7 +45,13 @@ scripts/                            # Thin CLI entry points
 ├── build_kb.py                     # KB construction
 ├── generate.py                     # Single-post or batch generation
 ├── evaluate.py                     # RAG quality evaluation
-└── evaluate_classifiers.py         # Classifier accuracy evaluation + threshold sweep
+├── evaluate_classifiers.py         # Classifier accuracy evaluation + threshold sweep
+└── api.py                          # FastAPI server (Web UI + REST API)
+
+frontend/                           # Browser UI (served by FastAPI)
+├── index.html                      # Single-page app markup
+├── styles.css                      # Styles (pills, concern bar, suggestion box)
+└── app.js                          # Fetch /analyze, render results
 
 configs/
 ├── data.yaml                       # Data paths and split settings
@@ -203,6 +209,119 @@ python scripts/evaluate_classifiers.py \
 
 Reports intent (macro F1, micro F1, per-tag precision/recall/F1, PR-AUC) and concern (accuracy, macro F1, per-label F1, confusion matrix).
 
+**Tuning intent and concern**
+
+- **Intent–concern consistency:** The pipeline applies a consistency step so high-severity intents are never paired with low concern: e.g. *Critical Risk* → concern is raised to *high*; *Maladaptive Coping*, *Mental Distress*, or *Seeking Help* with predicted *low* concern → raised to *medium*. This avoids nonsensical combinations (e.g. "Critical Risk" + "low" concern).
+- **Intent threshold:** In `configs/pipeline.yaml`, `intent_threshold` controls how many intent tags are predicted (lower ≈ more tags, higher ≈ fewer). Default is often 0.35. If intents feel too noisy, try 0.40–0.45; if important tags are missing, try 0.25–0.30. To sweep on the val set and write the best value to the config, run:
+  ```bash
+  python scripts/evaluate_classifiers.py --pipeline-config configs/pipeline.yaml --data-config configs/data.yaml --split val --calibrate
+  ```
+- **Concern still off:** Run the evaluator without `--calibrate` to see the confusion matrix and per-label F1. Most confusion is usually between *low* and *medium*. If the model systematically under- or over-predicts severity, consider retraining the concern classifier with different class weights or more data for the underperforming class.
+
+**Is it the data? Yes, often.** Intent and concern detection are limited by the **quality and quantity** of the example data:
+
+| Issue | Effect | What to do |
+|-------|--------|------------|
+| **Small or imbalanced labels** | Model under-predicts rare intents (e.g. Critical Risk, Mood Tracking) or concern levels (e.g. High). | Add more labeled examples for minority classes; use class weights (already used in training); consider oversampling or data augmentation. |
+| **Concern derived from tags** | If `Concern_Level` was created from intent tags (e.g. via `scripts/concern_levels_3tier.py`), concern is redundant with intent—errors in intent propagate to concern, and the concern model has no extra signal. | Prefer **human-labeled concern** where possible, or accept that concern will track intent. |
+| **Noisy or inconsistent tags** | Human or LLM taggers may disagree; same kind of post tagged differently. | Audit data (see below); add guidelines; consider multi-annotator agreement and cleaning. |
+| **Single-tag dominance** | Many posts have only one intent tag; model may bias toward single-tag predictions. | Normal if your domain is single-intent; otherwise add multi-label examples. |
+| **LLM-extended labels** | If you used `scripts/llm_tagging.py` to extend labels, BART zero-shot can mislabel. | Prefer human labels for high-stakes tags (e.g. Critical Risk); use LLM tags as weak supervision or for pre-training only. |
+
+To **audit your training data** (label and tag distribution, imbalance, potential issues):
+
+```bash
+python scripts/data_audit.py --config configs/data.yaml
+```
+
+This prints counts per intent tag and concern level, and flags severe imbalance or missing labels.
+
+**How to improve intent and concern with data**
+
+0. **Clean existing data (optional)**  
+   Normalize tags and concern, drop invalid/duplicate rows, then regenerate splits:
+   ```bash
+   python scripts/fix_data.py --config configs/data.yaml --create-splits
+   ```
+   A backup is written to `<raw_csv>.backup.csv`. Use `--derive-concern` to set concern from intent tags for consistency.
+
+1. **Audit first**  
+   Run `scripts/data_audit.py` and note which intents or concern levels are rare or imbalanced.
+
+2. **Add more labeled examples**  
+   - Raw data lives in the CSV set by `paths.raw_csv` in `configs/data.yaml` (default: `data/raw/final/mh_signal_data_w-concern-intent.csv`).  
+   - Required columns: **Post** (or Text), **Tag** (or Final_Tags), **Concern_Level**.  
+   - **Intent (Tag):** Comma- or semicolon-separated canonical tags, e.g. `Mental Distress, Seeking Help` or `Critical Risk`. Use exactly: `Critical Risk`, `Mental Distress`, `Maladaptive Coping`, `Positive Coping`, `Seeking Help`, `Progress Update`, `Mood Tracking`, `Cause of Distress`, `Miscellaneous`.  
+   - **Concern_Level:** One of `low`, `medium`, `high` (case-insensitive).  
+   - Prefer **human labels** for safety-related tags (e.g. Critical Risk) and for concern; avoid deriving concern only from tags if you want the concern model to add signal.
+
+3. **Fix concern if it was tag-derived**  
+   If concern was created from tags (e.g. `scripts/concern_levels_3tier.py`), consider:  
+   - Adding **human concern** labels for a subset (e.g. 500–1000 rows) and merging into the raw CSV, or  
+   - Keeping derived concern but accepting that concern will largely follow intent (and improving intent first).
+
+4. **Balance minority classes**  
+   - Add more rows for rare intents (e.g. Critical Risk, Mood Tracking, Maladaptive Coping) and for **high** concern.  
+   - You can duplicate or lightly paraphrase existing minority-class rows as a simple form of oversampling (use sparingly to avoid overfitting).
+
+5. **Regenerate splits and retrain**  
+   After updating the raw CSV:
+
+   ```bash
+   python scripts/create_splits.py --config configs/data.yaml
+   python scripts/train.py --task intent --encoder lora --config configs/roberta_lora.yaml
+   python scripts/train.py --task concern --encoder lora --config configs/roberta_lora_concern.yaml
+   ```
+
+   Then point `configs/pipeline.yaml` at the new checkpoints and re-run evaluation:
+
+   ```bash
+   python scripts/evaluate_classifiers.py --pipeline-config configs/pipeline.yaml --data-config configs/data.yaml --split test
+   ```
+
+6. **Optional: merge new labels from a separate file**  
+   If you collect new labels in a second CSV (same columns: Post, Tag, Concern_Level), use the merge script:
+
+   ```bash
+   python scripts/merge_labels.py --raw data/raw/final/mh_signal_data_w-concern-intent.csv --new data/raw/final/new_labels.csv --create-splits --config configs/data.yaml
+   ```
+
+   This appends new rows to the raw CSV (new rows overwrite same Post if duplicate), then regenerates train/val/test. Then retrain as in step 5.
+
+7. **Optional: add synthetic examples**  
+   A small set of synthetic, label-consistent examples (Mood Tracking, Maladaptive Coping, Critical Risk, high concern, etc.) is in `data/raw/final/synthetic_examples.csv`. To regenerate and merge them:
+
+   ```bash
+   python scripts/add_synthetic_data.py --output data/raw/final/synthetic_examples.csv
+   python scripts/merge_labels.py --new data/raw/final/synthetic_examples.csv --create-splits --config configs/data.yaml
+   ```
+
+   You can edit `scripts/add_synthetic_data.py` to add or change synthetic rows, then re-run the above. Retrain after merging (step 5).
+
+**Analysis: did adding data improve intent/concern?**
+
+To check whether adding more data (e.g. synthetic examples) improved the classifiers:
+
+1. **Baseline** (current checkpoints on current test set):  
+   Run evaluation and save results:
+   ```bash
+   python scripts/evaluate_classifiers.py --pipeline-config configs/pipeline.yaml --data-config configs/data.yaml --split test --output results/classifier_metrics_baseline.json
+   ```
+
+2. **Retrain** intent and concern on the updated data, then update `intent_checkpoint` and `concern_checkpoint` in `configs/pipeline.yaml`.
+
+3. **After retrain:**  
+   Run evaluation again and save:
+   ```bash
+   python scripts/evaluate_classifiers.py --pipeline-config configs/pipeline.yaml --data-config configs/data.yaml --split test --output results/classifier_metrics_after_retrain.json
+   ```
+
+4. **Compare:**  
+   ```bash
+   python scripts/compare_classifier_metrics.py results/classifier_metrics_baseline.json results/classifier_metrics_after_retrain.json
+   ```
+   Use `--labels` to see per-label intent and concern F1 comparison.
+
 ### 5. Evaluate RAG Quality
 
 ```bash
@@ -225,6 +344,53 @@ python -m pytest tests/ -m "not slow" -v
 
 # All tests including slow model-dependent ones
 python -m pytest tests/ -v
+```
+
+---
+
+## Web UI
+
+A browser-based interface for the pipeline, powered by FastAPI.
+
+### Install extra dependencies
+
+```bash
+pip install -r requirements.txt   # includes fastapi + uvicorn
+```
+
+### Start the server
+
+```bash
+# Default: loads configs/pipeline.yaml
+uvicorn scripts.api:app --host 0.0.0.0 --port 8000
+
+# Or point to a different config
+MH_CONFIG=configs/my_pipeline.yaml uvicorn scripts.api:app --port 8000
+```
+
+Open **http://localhost:8000/** in your browser. Paste a support-group post, click **Analyze**, and the UI displays:
+
+| Section | What it shows |
+|---------|---------------|
+| **Intent** | Predicted intent tags as colored pills |
+| **Concern Level** | Gradient bar (green → yellow → red) with an indicator |
+| **Why?** | Short excerpt from the post |
+| **Suggestion** | Generated reply (with crisis footer when applicable) |
+
+### API endpoint
+
+`POST /analyze` accepts `{"post": "..."}` and returns JSON:
+
+```json
+{
+  "intents": ["Mental Distress", "Seeking Help"],
+  "concern": "medium",
+  "crisis_level": "none",
+  "crisis_detected": false,
+  "reply": "It sounds like you're going through...",
+  "disclaimer": "This is an automated support resource...",
+  "post_excerpt": "I've been feeling really anxious..."
+}
 ```
 
 ---

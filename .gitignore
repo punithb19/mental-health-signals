@@ -45,4 +45,19 @@ dist/
 
 logs/interactions/
 
+*.jpg
+*.JPG
+*.jpeg
+*.png
+
+# Regenerable with: python scripts/add_synthetic_data.py
+data/raw/final/synthetic_examples.csv
+
+# Backup / generated data files
+data/raw/final/*.backup.csv
+data/splits/test_pred_*.jsonl
+
+# Regenerable metrics snapshots
+results/classifier_metrics_*.json
+
 .DS_Store

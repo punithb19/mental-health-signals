@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mental Health Signal Detector</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>Mental Health Signal Detector</h1>
+      <p class="disclaimer">
+        <span class="icon-warn">&#9888;</span>
+        This tool is research-only. Not a substitute for professional care.
+      </p>
+    </header>
+
+    <!-- Input -->
+    <section class="input-section">
+      <label for="post-input" class="label">POST</label>
+      <textarea
+        id="post-input"
+        rows="6"
+        placeholder="Paste a post from an online support group..."
+      ></textarea>
+      <button id="analyze-btn" type="button">Analyze</button>
+    </section>
+
+    <!-- Error -->
+    <div id="error-box" class="error-box" hidden></div>
+
+    <!-- Results (hidden until analysis completes) -->
+    <section id="results" class="results" hidden>
+
+      <!-- Intent -->
+      <div class="result-group">
+        <h2>Intent</h2>
+        <div id="intent-pills" class="pills"></div>
+      </div>
+
+      <!-- Concern Level -->
+      <div class="result-group">
+        <h2>Concern Level</h2>
+        <div class="concern-bar-wrapper">
+          <div class="concern-bar">
+            <div id="concern-indicator" class="concern-indicator"></div>
+          </div>
+          <div class="concern-labels">
+            <span>Low</span>
+            <span>Medium</span>
+            <span>High</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Why? -->
+      <div class="result-group">
+        <h2>Why?</h2>
+        <p id="why-text" class="why-text"></p>
+      </div>
+
+      <!-- Suggestion -->
+      <div class="result-group">
+        <h2>Suggestion</h2>
+        <div id="suggestion-box" class="suggestion-box">
+          <span class="icon-warn suggestion-icon">&#9888;</span>
+          <p id="suggestion-text"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
