@@ -14,6 +14,9 @@ Given a mental health support-group post, **automatically**:
 
 All as a **single end-to-end pipeline** where classification directly drives retrieval and generation quality. Accuracy of signal detection is measured via classifier metrics (macro F1, per-tag precision/recall); RAG quality is measured via the ReplyQualityEvaluator (relevance, grounding, safety, crisis coverage).
 
+## Demo
+
+https://drive.google.com/file/d/1ZDKXDV_t4kHQJXaZrpory1hL-nWwGcuP/view?usp=sharing
 ---
 
 ## Architecture
